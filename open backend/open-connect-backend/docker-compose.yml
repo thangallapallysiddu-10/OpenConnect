@@ -1,0 +1,31 @@
+services:
+  api:
+    build: .
+    ports: ["${PORT:-4000}:4000"]
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      DATABASE_URL: postgresql://openconnect:openconnect_secret@postgres:5432/openconnect
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_DB: 0
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:-change-this-access-secret-32-characters}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-change-this-refresh-secret-32-chars}
+      CORS_ORIGIN: ${CORS_ORIGIN:-*}
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    restart: unless-stopped
+  postgres:
+    image: postgres:16-alpine
+    environment: { POSTGRES_USER: openconnect, POSTGRES_PASSWORD: openconnect_secret, POSTGRES_DB: openconnect }
+    ports: ["5432:5432"]
+    volumes: ["postgres_data:/var/lib/postgresql/data"]
+    healthcheck: { test: ["CMD-SHELL","pg_isready -U openconnect -d openconnect"], interval: 5s, timeout: 5s, retries: 10 }
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes
+    ports: ["6379:6379"]
+    volumes: ["redis_data:/data"]
+    healthcheck: { test: ["CMD","redis-cli","ping"], interval: 5s, timeout: 5s, retries: 10 }
+volumes: { postgres_data: {}, redis_data: {} }

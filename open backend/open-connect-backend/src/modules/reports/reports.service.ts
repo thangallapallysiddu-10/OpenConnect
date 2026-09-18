@@ -1,0 +1,1 @@
+import { addQueueJob } from '../../queues';import { ReportsRepository } from './reports.repository';export const ReportsService={create:async(u:string,b:any)=>{const r=await ReportsRepository.create(u,b);await addQueueJob('report.queue','review',{reportId:r.id});return r},request:ReportsRepository.request};
