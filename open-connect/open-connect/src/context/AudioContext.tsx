@@ -1,8 +1,4 @@
-import { Audio } from 'expo-av';
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
-import { Alert } from 'react-native';
-
-// ── Types ─────────────────────────────────────────────────────────────────────
 
 interface Track {
   id: string;
@@ -22,14 +18,13 @@ interface AudioContextType {
   playTrack: (track: Track) => Promise<void>;
   pauseTrack: () => Promise<void>;
   resumeTrack: () => Promise<void>;
+  clearTrack: () => void;
   playNext: () => void;
   playPrevious: () => void;
   seekTo: (seconds: number) => Promise<void>;
   seekForward: () => Promise<void>;
   seekBackward: () => Promise<void>;
 }
-
-// ── Sample tracks — defined OUTSIDE component so never recreated ──────────────
 
 const SAMPLE_TRACKS: Track[] = [
   {
@@ -76,8 +71,6 @@ const SAMPLE_TRACKS: Track[] = [
   },
 ];
 
-// ── Context ───────────────────────────────────────────────────────────────────
-
 const AudioContext = createContext<AudioContextType | undefined>(undefined);
 
 export const useAudio = () => {
@@ -86,184 +79,190 @@ export const useAudio = () => {
   return context;
 };
 
-// ── Provider ──────────────────────────────────────────────────────────────────
-
 export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [currentTrack, setCurrentTrack] = useState<Track | null>(null);
-  const [isPlaying, setIsPlaying]       = useState(false);
-  const [isLoaded, setIsLoaded]         = useState(false);
-  const [isLoading, setIsLoading]       = useState(false);
-  const [position, setPosition]         = useState(0);
-  const [duration, setDuration]         = useState(0);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [isLoaded, setIsLoaded] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [position, setPosition] = useState(0);
+  const [duration, setDuration] = useState(0);
 
-  // Refs to avoid stale closures in callbacks
-  const soundRef        = useRef<Audio.Sound | null>(null);
+  // HTMLAudioElement ref (replaces expo-av Audio.Sound)
+  const audioRef = useRef<HTMLAudioElement | null>(null);
   const currentTrackRef = useRef<Track | null>(null);
-  const durationRef     = useRef<number>(0);
-  const positionRef     = useRef<number>(0);
+  const positionRef = useRef<number>(0);
+  const durationRef = useRef<number>(0);
 
   // Keep refs in sync
   useEffect(() => { currentTrackRef.current = currentTrack; }, [currentTrack]);
   useEffect(() => { durationRef.current = duration; }, [duration]);
   useEffect(() => { positionRef.current = position; }, [position]);
 
-  // ── Cleanup on unmount ──────────────────────────────────────────────────────
+  // Cleanup on unmount
   useEffect(() => {
     return () => {
-      soundRef.current?.unloadAsync().catch(() => {});
-      soundRef.current = null;
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.src = '';
+        audioRef.current = null;
+      }
     };
   }, []);
 
-  // ── Unload helper ───────────────────────────────────────────────────────────
-  const unloadCurrent = async () => {
-    if (soundRef.current) {
-      try {
-        await soundRef.current.stopAsync();
-        await soundRef.current.unloadAsync();
-      } catch (_) {}
-      soundRef.current = null;
+  const unloadCurrent = () => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.removeEventListener('timeupdate', () => {});
+      audioRef.current.removeEventListener('loadedmetadata', () => {});
+      audioRef.current.removeEventListener('ended', () => {});
+      audioRef.current.src = '';
+      audioRef.current = null;
     }
   };
 
-  // ── Core play ───────────────────────────────────────────────────────────────
+  const clearTrack = () => {
+    console.log('🧹 Clearing song track');
+    unloadCurrent();
+    setCurrentTrack(null);
+    setIsPlaying(false);
+    setPosition(0);
+    setDuration(0);
+    setIsLoaded(false);
+  };
+
   const playTrackInternal = async (track: Track) => {
     try {
       setIsLoading(true);
       setIsLoaded(false);
+      setIsPlaying(false);
       setPosition(0);
       setDuration(0);
 
-      await unloadCurrent();
+      unloadCurrent();
 
       setCurrentTrack(track);
       currentTrackRef.current = track;
 
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: false,
-        staysActiveInBackground: true,
-        playsInSilentModeIOS: true,
-        shouldDuckAndroid: true,
-        playThroughEarpieceAndroid: false,
-      });
-
-      const uri = track.uri ?? 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3';
-
-      const { sound } = await Audio.Sound.createAsync(
-        { uri },
-        { shouldPlay: true, progressUpdateIntervalMillis: 500 },
-        (status) => {
-          // Inline callback uses refs — no stale closure issues
-          if (!status.isLoaded) return;
-          setIsPlaying(status.isPlaying);
-          setPosition(status.positionMillis / 1000);
-          if (status.durationMillis) {
-            setDuration(status.durationMillis / 1000);
-            durationRef.current = status.durationMillis / 1000;
-          }
-          if (status.didJustFinish) {
-            const t = currentTrackRef.current;
-            if (!t) return;
-            const idx  = SAMPLE_TRACKS.findIndex(x => x.id === t.id);
-            const next = SAMPLE_TRACKS[(idx + 1) % SAMPLE_TRACKS.length];
-            setTimeout(() => playTrackInternal(next), 400);
-          }
-        }
-      );
-
-      soundRef.current = sound;
-
-      const status = await sound.getStatusAsync();
-      if (status.isLoaded && status.durationMillis) {
-        setDuration(status.durationMillis / 1000);
-        durationRef.current = status.durationMillis / 1000;
+      const uri = track.uri;
+      if (!uri) {
+        console.error('❌ No URI provided for track:', track.title);
+        setIsLoading(false);
+        return;
       }
 
+      // Create native browser audio element
+      const audio = new Audio(uri);
+      audioRef.current = audio;
+
+      // Progress updates
+      audio.addEventListener('timeupdate', () => {
+        setPosition(audio.currentTime);
+        positionRef.current = audio.currentTime;
+      });
+
+      // Duration once metadata loads
+      audio.addEventListener('loadedmetadata', () => {
+        setDuration(audio.duration);
+        durationRef.current = audio.duration;
+      });
+
+      // Auto-advance to next track when done
+      audio.addEventListener('ended', () => {
+        const t = currentTrackRef.current;
+        if (!t) return;
+        const idx = SAMPLE_TRACKS.findIndex(x => x.id === t.id);
+        const next = SAMPLE_TRACKS[(idx + 1) % SAMPLE_TRACKS.length];
+        setTimeout(() => playTrackInternal(next), 400);
+      });
+
+      // Sync playing state with browser audio events
+      audio.addEventListener('play', () => setIsPlaying(true));
+      audio.addEventListener('pause', () => setIsPlaying(false));
+
       setIsLoaded(true);
-      setIsPlaying(true);
+      setIsLoading(false);
+
+      // ── FIX: Actually start playing ──
+      try {
+        await audio.play();
+        setIsPlaying(true);
+        console.log('▶️ Playing:', track.title);
+      } catch (playError) {
+        console.warn('⚠️ Autoplay blocked, user interaction required:', playError);
+        setIsPlaying(false);
+      }
+
     } catch (error) {
       console.error('playTrackInternal error:', error);
-      Alert.alert('Playback Error', 'Could not play this track.');
       setIsLoaded(false);
       setIsPlaying(false);
-    } finally {
       setIsLoading(false);
     }
   };
 
-  // ── Public playTrack ────────────────────────────────────────────────────────
   const playTrack = async (track: Track) => {
-    if (currentTrackRef.current?.id === track.id && soundRef.current) {
-      try {
-        const status = await soundRef.current.getStatusAsync();
-        if (status.isLoaded && status.isPlaying) return;
-        if (status.isLoaded && !status.isPlaying) {
-          await soundRef.current.playAsync();
+    console.log('🎵 playTrack called for:', track.title);
+
+    // Same track already loaded → toggle play/pause
+    if (currentTrackRef.current?.id === track.id && audioRef.current) {
+      const audio = audioRef.current;
+      if (!audio.paused) {
+        console.log('⏸️ Pausing');
+        audio.pause();
+        setIsPlaying(false);
+      } else {
+        console.log('▶️ Resuming');
+        try {
+          await audio.play();
           setIsPlaying(true);
-          return;
+        } catch (e) {
+          console.warn('Resume failed:', e);
         }
-      } catch (_) {}
+      }
+      return;
     }
+
+    console.log('🆕 Loading new track');
     await playTrackInternal(track);
   };
 
-  // ── Pause ───────────────────────────────────────────────────────────────────
   const pauseTrack = async () => {
-    if (!soundRef.current) return;
-    try {
-      const status = await soundRef.current.getStatusAsync();
-      if (status.isLoaded && status.isPlaying) {
-        await soundRef.current.pauseAsync();
-        setIsPlaying(false);
-      }
-    } catch (error) {
-      console.error('pauseTrack error:', error);
+    console.log('⏸️ pauseTrack called');
+    if (audioRef.current && !audioRef.current.paused) {
+      audioRef.current.pause();
+      setIsPlaying(false);
     }
   };
 
-  // ── Resume ──────────────────────────────────────────────────────────────────
   const resumeTrack = async () => {
-    if (!soundRef.current) {
+    console.log('▶️ resumeTrack called');
+    if (!audioRef.current) {
       if (currentTrackRef.current) await playTrackInternal(currentTrackRef.current);
       return;
     }
     try {
-      const status = await soundRef.current.getStatusAsync();
-      if (status.isLoaded && !status.isPlaying) {
-        await soundRef.current.playAsync();
-        setIsPlaying(true);
-      } else if (!status.isLoaded && currentTrackRef.current) {
-        await playTrackInternal(currentTrackRef.current);
-      }
+      await audioRef.current.play();
+      setIsPlaying(true);
     } catch (error) {
       console.error('resumeTrack error:', error);
       if (currentTrackRef.current) await playTrackInternal(currentTrackRef.current);
     }
   };
 
-  // ── Seek ────────────────────────────────────────────────────────────────────
   const seekTo = async (seconds: number) => {
-    if (!soundRef.current) return;
-    try {
-      const status = await soundRef.current.getStatusAsync();
-      if (status.isLoaded) {
-        const clamped = Math.max(0, Math.min(seconds, durationRef.current));
-        await soundRef.current.setPositionAsync(clamped * 1000);
-        setPosition(clamped);
-      }
-    } catch (error) {
-      console.error('seekTo error:', error);
-    }
+    if (!audioRef.current) return;
+    const clamped = Math.max(0, Math.min(seconds, durationRef.current));
+    audioRef.current.currentTime = clamped;
+    setPosition(clamped);
   };
 
-  const seekForward  = async () => seekTo(positionRef.current + 10);
+  const seekForward = async () => seekTo(positionRef.current + 10);
   const seekBackward = async () => seekTo(positionRef.current - 10);
 
-  // ── Next / Previous ─────────────────────────────────────────────────────────
   const playNext = useCallback(() => {
     const track = currentTrackRef.current;
     if (!track) return;
-    const idx  = SAMPLE_TRACKS.findIndex(t => t.id === track.id);
+    const idx = SAMPLE_TRACKS.findIndex(t => t.id === track.id);
     const next = SAMPLE_TRACKS[(idx + 1) % SAMPLE_TRACKS.length];
     playTrackInternal(next);
   }, []);
@@ -271,7 +270,7 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const playPrevious = useCallback(() => {
     const track = currentTrackRef.current;
     if (!track) return;
-    const idx  = SAMPLE_TRACKS.findIndex(t => t.id === track.id);
+    const idx = SAMPLE_TRACKS.findIndex(t => t.id === track.id);
     const prev = SAMPLE_TRACKS[(idx - 1 + SAMPLE_TRACKS.length) % SAMPLE_TRACKS.length];
     playTrackInternal(prev);
   }, []);
@@ -288,6 +287,7 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         playTrack,
         pauseTrack,
         resumeTrack,
+        clearTrack,
         playNext,
         playPrevious,
         seekTo,

@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   Dimensions,
   FlatList,
@@ -11,48 +11,71 @@ import {
   TouchableOpacity,
   useWindowDimensions,
   View,
+  Text,
 } from 'react-native';
 import { styles } from '../src/styles/search.styles';
 import { useTheme } from '../src/context/ThemeContext';
 
 const { width } = Dimensions.get('window');
 
-// ── Reliable image URLs using picsum.photos with fixed seeds ──────────────────
+// ── All searchable data ──
+const ALL_SEARCHABLE_ITEMS = [
+  // Songs
+  { id: 's1', title: 'Blinding Lights', artist: 'The Weeknd', type: 'song', year: '2020', image: 'https://picsum.photos/seed/bl/200/200' },
+  { id: 's2', title: 'After Hours', artist: 'The Weeknd', type: 'song', year: '2020', image: 'https://picsum.photos/seed/ah/200/200' },
+  { id: 's3', title: 'Midnight Dreams', artist: 'The Weeknd', type: 'song', year: '2021', image: 'https://picsum.photos/seed/mid/200/200' },
+  { id: 's4', title: 'Golden Hour', artist: 'JVKE', type: 'song', year: '2022', image: 'https://picsum.photos/seed/gold/200/200' },
+  { id: 's5', title: 'Smooth Operator', artist: 'Sade', type: 'song', year: '1984', image: 'https://picsum.photos/seed/sade/200/200' },
+  { id: 's6', title: 'Cruel Summer', artist: 'Taylor Swift', type: 'song', year: '2019', image: 'https://picsum.photos/seed/cruel/200/200' },
+  { id: 's7', title: 'Flowers', artist: 'Miley Cyrus', type: 'song', year: '2023', image: 'https://picsum.photos/seed/flowers/200/200' },
+  { id: 's8', title: 'Dance The Night', artist: 'Dua Lipa', type: 'song', year: '2023', image: 'https://picsum.photos/seed/dance/200/200' },
+  // Artists
+  { id: 'a1', title: 'The Weeknd', artist: '32.5M monthly listeners', type: 'artist', image: 'https://picsum.photos/seed/wknd2/200/200' },
+  { id: 'a2', title: 'Taylor Swift', artist: '45.2M monthly listeners', type: 'artist', image: 'https://picsum.photos/seed/tswift/200/200' },
+  { id: 'a3', title: 'Dua Lipa', artist: '28.7M monthly listeners', type: 'artist', image: 'https://picsum.photos/seed/dua/200/200' },
+  { id: 'a4', title: 'Billie Eilish', artist: '24.3M monthly listeners', type: 'artist', image: 'https://picsum.photos/seed/billie/200/200' },
+  { id: 'a5', title: 'Arijit Singh', artist: '18.9M monthly listeners', type: 'artist', image: 'https://picsum.photos/seed/arijit/200/200' },
+  { id: 'a6', title: 'SZA', artist: '15.6M monthly listeners', type: 'artist', image: 'https://picsum.photos/seed/sza/200/200' },
+  // Playlists
+  { id: 'p1', title: 'Chill Vibes', artist: 'Curated playlist', type: 'playlist', songs: '48 songs', image: 'https://picsum.photos/seed/cv/200/200' },
+  { id: 'p2', title: 'Late Night Drive', artist: 'Curated playlist', type: 'playlist', songs: '52 songs', image: 'https://picsum.photos/seed/night/200/200' },
+  { id: 'p3', title: 'Morning Coffee', artist: 'Curated playlist', type: 'playlist', songs: '36 songs', image: 'https://picsum.photos/seed/coffee/200/200' },
+  { id: 'p4', title: 'Focus Flow', artist: 'Curated playlist', type: 'playlist', songs: '42 songs', image: 'https://picsum.photos/seed/focus/200/200' },
+  // Albums
+  { id: 'al1', title: 'After Hours', artist: 'The Weeknd', type: 'album', year: '2020', image: 'https://picsum.photos/seed/ah2/200/200' },
+  { id: 'al2', title: 'Midnights', artist: 'Taylor Swift', type: 'album', year: '2022', image: 'https://picsum.photos/seed/midnights/200/200' },
+  { id: 'al3', title: 'Future Nostalgia', artist: 'Dua Lipa', type: 'album', year: '2020', image: 'https://picsum.photos/seed/future/200/200' },
+];
+
+// ── Static data for sections ──
 const recentlyPlayed = [
-  { id: '1', title: 'Midnight Dreams',  artist: 'The Weeknd', plays: '2.1M plays', image: 'https://picsum.photos/seed/mid/400/400' },
-  { id: '2', title: 'Golden Hour',      artist: 'JVKE',       plays: '1.8M plays', image: 'https://picsum.photos/seed/gold/400/400' },
-  { id: '3', title: 'Smooth Operator',  artist: 'Sade',       plays: '3.2M plays', image: 'https://picsum.photos/seed/sade/400/400' },
-  { id: '4', title: 'After Hours',      artist: 'The Weeknd', plays: '2.7M plays', image: 'https://picsum.photos/seed/after/400/400' },
+  { id: '1', title: 'Midnight Dreams', artist: 'The Weeknd', plays: '2.1M plays', image: 'https://picsum.photos/seed/mid/400/400' },
+  { id: '2', title: 'Golden Hour', artist: 'JVKE', plays: '1.8M plays', image: 'https://picsum.photos/seed/gold/400/400' },
+  { id: '3', title: 'Smooth Operator', artist: 'Sade', plays: '3.2M plays', image: 'https://picsum.photos/seed/sade/400/400' },
+  { id: '4', title: 'After Hours', artist: 'The Weeknd', plays: '2.7M plays', image: 'https://picsum.photos/seed/after/400/400' },
 ];
 
 const popularArtists = [
-  { id: '1', name: 'The Weeknd',   genre: 'R&B/Pop',    followers: '32.5M', image: 'https://picsum.photos/seed/wknd/400/400' },
-  { id: '2', name: 'Taylor Swift', genre: 'Pop',         followers: '45.2M', image: 'https://picsum.photos/seed/tswift/400/400' },
-  { id: '3', name: 'Dua Lipa',     genre: 'Pop/Dance',  followers: '28.7M', image: 'https://picsum.photos/seed/dua/400/400' },
-  { id: '4', name: 'Billie Eilish',genre: 'Alternative',followers: '24.3M', image: 'https://picsum.photos/seed/billie/400/400' },
-  { id: '5', name: 'Arijit Singh', genre: 'Bollywood',  followers: '18.9M', image: 'https://picsum.photos/seed/arijit/400/400' },
-  { id: '6', name: 'SZA',          genre: 'R&B',         followers: '15.6M', image: 'https://picsum.photos/seed/sza/400/400' },
+  { id: '1', name: 'The Weeknd', genre: 'R&B/Pop', followers: '32.5M', image: 'https://picsum.photos/seed/wknd/400/400' },
+  { id: '2', name: 'Taylor Swift', genre: 'Pop', followers: '45.2M', image: 'https://picsum.photos/seed/tswift/400/400' },
+  { id: '3', name: 'Dua Lipa', genre: 'Pop/Dance', followers: '28.7M', image: 'https://picsum.photos/seed/dua/400/400' },
+  { id: '4', name: 'Billie Eilish', genre: 'Alternative', followers: '24.3M', image: 'https://picsum.photos/seed/billie/400/400' },
+  { id: '5', name: 'Arijit Singh', genre: 'Bollywood', followers: '18.9M', image: 'https://picsum.photos/seed/arijit/400/400' },
+  { id: '6', name: 'SZA', genre: 'R&B', followers: '15.6M', image: 'https://picsum.photos/seed/sza/400/400' },
 ];
 
 const curatedPlaylists = [
-  { id: '1', title: 'Chill Vibes',      description: 'Relax & unwind',       songs: '48 songs', duration: '2h 45m', image: 'https://picsum.photos/seed/chill/400/400', color: '#C5A572' },
-  { id: '2', title: 'Late Night Drive', description: 'Smooth R&B',           songs: '52 songs', duration: '3h 10m', image: 'https://picsum.photos/seed/night/400/400', color: '#9B8B7A' },
-  { id: '3', title: 'Morning Coffee',   description: 'Acoustic mornings',    songs: '36 songs', duration: '2h 05m', image: 'https://picsum.photos/seed/coffee/400/400', color: '#C5A572' },
-  { id: '4', title: 'Focus Flow',       description: 'Deep concentration',   songs: '42 songs', duration: '2h 30m', image: 'https://picsum.photos/seed/focus/400/400', color: '#9B8B7A' },
+  { id: '1', title: 'Chill Vibes', description: 'Relax & unwind', songs: '48 songs', duration: '2h 45m', image: 'https://picsum.photos/seed/chill/400/400', color: '#C5A572' },
+  { id: '2', title: 'Late Night Drive', description: 'Smooth R&B', songs: '52 songs', duration: '3h 10m', image: 'https://picsum.photos/seed/night/400/400', color: '#9B8B7A' },
+  { id: '3', title: 'Morning Coffee', description: 'Acoustic mornings', songs: '36 songs', duration: '2h 05m', image: 'https://picsum.photos/seed/coffee/400/400', color: '#C5A572' },
+  { id: '4', title: 'Focus Flow', description: 'Deep concentration', songs: '42 songs', duration: '2h 30m', image: 'https://picsum.photos/seed/focus/400/400', color: '#9B8B7A' },
 ];
 
 const moodCategories = [
   { id: '1', mood: 'Energize', icon: '⚡', image: 'https://picsum.photos/seed/energy/400/400' },
-  { id: '2', mood: 'Relax',    icon: '🌊', image: 'https://picsum.photos/seed/relax/400/400' },
-  { id: '3', mood: 'Focus',    icon: '🎯', image: 'https://picsum.photos/seed/focusx/400/400' },
-  { id: '4', mood: 'Romance',  icon: '❤️', image: 'https://picsum.photos/seed/romance/400/400' },
-];
-
-const searchResults = [
-  { id: '1', title: 'Blinding Lights', artist: 'The Weeknd',              type: 'song',     year: '2020', image: 'https://picsum.photos/seed/bl/200/200' },
-  { id: '2', title: 'The Weeknd',      artist: '32.5M monthly listeners', type: 'artist',               image: 'https://picsum.photos/seed/wknd2/200/200' },
-  { id: '3', title: 'Chill Vibes',     artist: 'Curated playlist',        type: 'playlist', songs: '48 songs', image: 'https://picsum.photos/seed/cv/200/200' },
-  { id: '4', title: 'After Hours',     artist: 'The Weeknd',              type: 'album',    year: '2020', image: 'https://picsum.photos/seed/ah/200/200' },
+  { id: '2', mood: 'Relax', icon: '🌊', image: 'https://picsum.photos/seed/relax/400/400' },
+  { id: '3', mood: 'Focus', icon: '🎯', image: 'https://picsum.photos/seed/focusx/400/400' },
+  { id: '4', mood: 'Romance', icon: '❤️', image: 'https://picsum.photos/seed/romance/400/400' },
 ];
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -63,6 +86,18 @@ export default function SearchScreen() {
   const isDesktop = windowWidth >= 900;
   const [searchQuery, setSearchQuery] = useState('');
   const [showResults, setShowResults] = useState(false);
+
+  // ✅ FILTER search results based on query
+  const searchResults = useMemo(() => {
+    if (!searchQuery.trim()) return [];
+    
+    const query = searchQuery.toLowerCase().trim();
+    return ALL_SEARCHABLE_ITEMS.filter(item => 
+      item.title.toLowerCase().includes(query) ||
+      item.artist.toLowerCase().includes(query) ||
+      item.type?.toLowerCase().includes(query)
+    );
+  }, [searchQuery]);
 
   const handleSearch = (text: string) => {
     setSearchQuery(text);
@@ -89,7 +124,7 @@ export default function SearchScreen() {
           <View style={styles.resultType}>
             <Text style={styles.resultTypeText}>{item.type}</Text>
           </View>
-          {item.year  ? <Text style={[styles.resultYear, { color: colors.textMuted }]}>{item.year}</Text>  : null}
+          {item.year ? <Text style={[styles.resultYear, { color: colors.textMuted }]}>{item.year}</Text> : null}
           {item.songs ? <Text style={[styles.resultYear, { color: colors.textMuted }]}>{item.songs}</Text> : null}
         </View>
       </View>
@@ -199,6 +234,14 @@ export default function SearchScreen() {
           style={styles.resultsList}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ paddingBottom: 100 }}
+          ListEmptyComponent={
+            <View style={{ alignItems: 'center', marginTop: 40 }}>
+              <Ionicons name="search-outline" size={48} color={colors.textMuted} />
+              <Text style={{ color: colors.textMuted, fontSize: 16, marginTop: 12 }}>
+                No results found for "{searchQuery}"
+              </Text>
+            </View>
+          }
         />
       ) : (
         <ScrollView

@@ -80,10 +80,14 @@ export default function NowPlayingScreen() {
     seekTo(seekPosition);
   };
 
-  if (!currentTrack) {
-    router.back();
-    return null;
-  }
+  // Move navigation side-effect out of render phase to avoid React warning
+  useEffect(() => {
+    if (!currentTrack) {
+      router.back();
+    }
+  }, [currentTrack]);
+
+  if (!currentTrack) return null;
 
   const progress = duration > 0 ? position / duration : 0;
 
@@ -216,7 +220,7 @@ export default function NowPlayingScreen() {
             title: currentTrack.title,
             subtitle: currentTrack.artist,
             image: currentTrack.image?.uri ?? '',
-            type: 'music',
+            type: 'song',  
             rawData: currentTrack
           })}
         >

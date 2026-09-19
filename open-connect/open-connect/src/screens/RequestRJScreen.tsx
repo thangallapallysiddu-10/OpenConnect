@@ -134,10 +134,10 @@ export const RequestRJScreen = ({ onBack }: Props) => {
           </View>
 
           <ScrollView 
-            showsVerticalScrollIndicator={false} 
-            contentContainerStyle={styles.scrollContent}
-            keyboardShouldPersistTaps="handled"
-          >
+  showsVerticalScrollIndicator={false} 
+  contentContainerStyle={[styles.scrollContent, { paddingBottom: 140 }]}
+  keyboardShouldPersistTaps="handled"
+>
             <View style={{ width: '100%', maxWidth: 600, marginLeft: 'auto', marginRight: 'auto', paddingHorizontal: 16 }}>
               {/* Title & Description */}
               <View style={styles.introSection}>
@@ -382,6 +382,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 24,
+    paddingBottom: 140, 
   },
   successBadge: {
     width: 90,

@@ -1,8 +1,10 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import { Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { useTheme } from '../../context/ThemeContext';
+import { useAudio } from '../../context/AudioContext';
+import { useRouter } from 'expo-router';
 
 const trendingTracks = [
   {
@@ -10,24 +12,28 @@ const trendingTracks = [
     title: 'Neon Skyline',
     artist: 'Cyber Drift',
     image: 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=100&q=80',
+    uri: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3',
   },
   {
     id: '2',
     title: 'Midnight Rain',
     artist: 'Luna Echoes',
     image: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=100&q=80',
+    uri: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3',
   },
   {
     id: '3',
     title: 'Lost in Tokyo',
     artist: 'The Wanderers',
     image: 'https://images.unsplash.com/photo-1493225457124-a1a2a5f5294b?w=100&q=80',
+    uri: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3',
   },
   {
     id: '4',
     title: 'Electric Pulse',
     artist: 'Nova Drive',
     image: 'https://images.unsplash.com/photo-1478737270239-2f02b77fc618?w=100&q=80',
+    uri: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3',
   },
 ];
 
@@ -40,6 +46,48 @@ const topRJs = [
 
 export default function DesktopRightSidebar() {
   const { theme, colors } = useTheme();
+  const router = useRouter();
+  const { playTrack, currentTrack, isPlaying, pauseTrack, resumeTrack } = useAudio();
+
+  // ── TAP LOCK to prevent double taps ──
+  const isTapping = useRef(false);
+
+  // ── Handle Play/Pause ──
+  const handlePlayPause = (track: any) => {
+    if (isTapping.current) return;
+    isTapping.current = true;
+
+    // ✅ Create a properly formatted track object
+    const trackData = {
+      id: track.id,
+      title: track.title,
+      artist: track.artist,
+      image: { uri: track.image },
+      uri: track.uri,
+    };
+
+    const isThisPlaying = currentTrack?.id === track.id && isPlaying;
+    
+    if (isThisPlaying) {
+      console.log('⏸️ Pausing:', track.title);
+      pauseTrack();
+    } else if (currentTrack?.id === track.id && !isPlaying) {
+      console.log('▶️ Resuming:', track.title);
+      resumeTrack();
+    } else {
+      console.log('🎵 Playing:', track.title);
+      playTrack(trackData);
+    }
+
+    setTimeout(() => {
+      isTapping.current = false;
+    }, 500);
+  };
+
+  // ── Check if track is playing ──
+  const isTrackPlaying = (track: any) => {
+    return currentTrack?.id === track.id && isPlaying;
+  };
 
   return (
     <View style={[S.container, { backgroundColor: colors.background }]}>
@@ -52,26 +100,40 @@ export default function DesktopRightSidebar() {
           {/* Trending Tracks */}
           <View style={S.section}>
             <Text style={[S.sectionTitle, { color: colors.text }]}>Trending Tracks</Text>
-            {trendingTracks.map((track) => (
-              <TouchableOpacity
-                key={track.id}
-                style={[S.trackItem, { borderBottomColor: theme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }]}
-                activeOpacity={0.7}
-              >
-                <Image source={{ uri: track.image }} style={S.trackImage} />
-                <View style={S.trackInfo}>
-                  <Text style={[S.trackTitle, { color: colors.text }]} numberOfLines={1}>
-                    {track.title}
-                  </Text>
-                  <Text style={[S.trackArtist, { color: colors.textSecondary }]} numberOfLines={1}>
-                    {track.artist}
-                  </Text>
+            {trendingTracks.map((track) => {
+              const isPlayingNow = isTrackPlaying(track);
+              return (
+                <View
+                  key={track.id}
+                  style={[S.trackItem, { borderBottomColor: theme === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' }]}
+                >
+                  <Image source={{ uri: track.image }} style={S.trackImage} />
+                  <View style={S.trackInfo}>
+                    <Text style={[S.trackTitle, { color: colors.text }]} numberOfLines={1}>
+                      {track.title}
+                    </Text>
+                    <Text style={[S.trackArtist, { color: colors.textSecondary }]} numberOfLines={1}>
+                      {track.artist}
+                    </Text>
+                  </View>
+                  
+                  {/* ✅ Play/Pause Button */}
+                  <TouchableOpacity 
+                    style={[S.playBtn, { 
+                      backgroundColor: isPlayingNow ? 'rgba(236, 72, 153, 0.2)' : 'rgba(139, 92, 246, 0.15)' 
+                    }]}
+                    onPress={() => handlePlayPause(track)}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons 
+                      name={isPlayingNow ? 'pause' : 'play'} 
+                      size={16} 
+                      color={isPlayingNow ? '#EC4899' : (theme === 'dark' ? '#fff' : '#000')} 
+                    />
+                  </TouchableOpacity>
                 </View>
-                <TouchableOpacity style={S.playBtn}>
-                  <Ionicons name="play" size={16} color={theme === 'dark' ? '#fff' : '#000'} />
-                </TouchableOpacity>
-              </TouchableOpacity>
-            ))}
+              );
+            })}
           </View>
 
           {/* Top RJs */}
@@ -143,7 +205,6 @@ const S = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: 'rgba(139, 92, 246, 0.15)',
     alignItems: 'center',
     justifyContent: 'center',
   },

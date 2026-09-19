@@ -490,7 +490,7 @@ const handleCloseComment = useCallback(() => {
       title: station.name,
       subtitle: `${station.frequency} • ${station.currentShow}`,
       image: station.thumbnail,
-      type: 'station',
+      type: 'rj',
       rawData: station,
     });
   }, [toggleFavorite]);
@@ -539,7 +539,7 @@ const handleCloseComment = useCallback(() => {
   );
 
   return (
-    <View style={styles.screen}>
+    <View style={[styles.screen, { paddingBottom: 80 }]}>
       <StatusBar translucent backgroundColor="transparent" barStyle="light-content" />
 
       {!isDesktop && (

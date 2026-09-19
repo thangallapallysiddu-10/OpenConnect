@@ -12,25 +12,113 @@ import {
   View,
 } from 'react-native';
 import { usePlayer } from '../../context/PlayerContext';
+import { useAudio } from '../../context/AudioContext';
+import { useRJLive } from '../../context/RJLiveContext';
 
-/**
- * DesktopPlayerBar
- * A persistent fixed-bottom player bar shown on desktop (width >= 900px).
- * Replaces the floating PodcastMiniPlayer overlay with a full-width
- * always-visible bar that matches Spotify's bottom player style.
- */
 export default function DesktopPlayerBar() {
   const pathname = usePathname();
+  
   const {
     currentPodcast,
-    isPlaying,
-    progress,
-    duration,
+    isPlaying: podcastIsPlaying,
+    progress: podcastProgress,
+    duration: podcastDuration,
     pausePodcast,
     resumePodcast,
     stopPodcast,
-    formatTime,
+    formatTime: formatPodcastTime,
   } = usePlayer();
+
+  const {
+    currentTrack,
+    isPlaying: audioIsPlaying,
+    position: audioPosition,
+    duration: audioDuration,
+    pauseTrack,
+    resumeTrack,
+    clearTrack,
+  } = useAudio();
+
+  const {
+    currentStation,
+    isPlaying: rjIsPlaying,
+    pauseLive,
+    resumeLive,
+    stopLive,
+  } = useRJLive();
+
+  // ── DETERMINE WHAT'S LOADED ──
+  const hasSong = !!currentTrack;
+  const hasPodcast = !!currentPodcast;
+  const hasRJ = !!currentStation;
+
+  const isPlaying = audioIsPlaying || podcastIsPlaying || rjIsPlaying;
+
+  let currentItem = null;
+  let progress = 0;
+  let duration = 0;
+  let title = '';
+  let subtitle = '';
+  let image = null;
+
+  if (hasSong) {
+    currentItem = currentTrack;
+    progress = audioPosition;
+    duration = audioDuration;
+    title = currentTrack.title;
+    subtitle = currentTrack.artist;
+    image = currentTrack.image;
+  } else if (hasPodcast) {
+    currentItem = currentPodcast;
+    progress = podcastProgress;
+    duration = podcastDuration;
+    title = currentPodcast.title;
+    subtitle = currentPodcast.creator;
+    image = currentPodcast.image;
+  } else if (hasRJ) {
+    currentItem = currentStation;
+    progress = 0;
+    duration = 0;
+    title = currentStation.rjName || 'RJ Live';
+    subtitle = currentStation.currentShow || 'Live';
+    image = currentStation.thumbnail;
+  }
+
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+  };
+
+  const togglePlayPause = () => {
+    if (hasSong) {
+      audioIsPlaying ? pauseTrack() : resumeTrack();
+    } else if (hasPodcast) {
+      podcastIsPlaying ? pausePodcast() : resumePodcast();
+    } else if (hasRJ) {
+      rjIsPlaying ? pauseLive() : resumeLive();
+    }
+  };
+
+  const stopPlayback = () => {
+    if (hasSong) {
+      clearTrack();
+    } else if (hasPodcast) {
+      stopPodcast();
+    } else if (hasRJ) {
+      stopLive();
+    }
+  };
+
+  const goToPlayer = () => {
+    if (hasSong) {
+      router.push('/now-player');
+    } else if (hasPodcast) {
+      router.push('/podcasts/player');
+    } else if (hasRJ) {
+      router.push('/rjs/live-radio');
+    }
+  };
 
   const progressWidth = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(100)).current;
@@ -46,7 +134,7 @@ export default function DesktopPlayerBar() {
   }, []);
 
   useEffect(() => {
-    if (!currentPodcast) {
+    if (!currentItem) {
       Animated.loop(
         Animated.sequence([
           Animated.timing(pulseAnim, { toValue: 1.05, duration: 1500, useNativeDriver: true }),
@@ -56,7 +144,7 @@ export default function DesktopPlayerBar() {
     } else {
       pulseAnim.setValue(1);
     }
-  }, [currentPodcast]);
+  }, [currentItem]);
 
   useEffect(() => {
     const pct = duration > 0 ? (progress / duration) * 100 : 0;
@@ -67,23 +155,12 @@ export default function DesktopPlayerBar() {
     }).start();
   }, [progress, duration]);
 
-  const goToPlayer = () => {
-    if (!currentPodcast) return;
-    const id = encodeURIComponent(String(currentPodcast.id));
-    const title = encodeURIComponent(String(currentPodcast.title));
-    const creator = encodeURIComponent(String(currentPodcast.creator));
-    const image = encodeURIComponent(String(currentPodcast.image));
-    router.push(`/podcasts/player?podcastId=${id}&podcastTitle=${title}&podcastCreator=${creator}&podcastImage=${image}`);
-  };
-
-  // Hide on these pages (the full player already shows)
-  const hidePaths = ['/podcasts/player', '/podcasts/live-player', '/podcasts/report', '/podcasts/report-option', '/now-player', '/livestations/stations', '/rjs/live-radio'];
+  const hidePaths = ['/podcasts/player', '/podcasts/live-player', '/now-player', '/rjs/live-radio'];
   if (hidePaths.includes(pathname)) return null;
 
-  // Nothing playing — show an animated idle bar
-  if (!currentPodcast) {
+  if (!currentItem) {
     return (
-      <Animated.View style={[S.barContainer, { transform: [{ translateY: slideAnim }] }]} pointerEvents="box-none">
+      <Animated.View style={[S.barContainer, { transform: [{ translateY: slideAnim }] }]}>
         <Animated.View style={{ width: '100%', transform: [{ scale: pulseAnim }] }}>
           <BlurView intensity={80} tint="dark" style={S.bar}>
             <View style={S.idleCenter}>
@@ -92,7 +169,7 @@ export default function DesktopPlayerBar() {
               </View>
               <View>
                 <Text style={S.idleTitle}>Nothing playing</Text>
-                <Text style={S.idleSub}>Pick a podcast or live station to start</Text>
+                <Text style={S.idleSub}>Pick a song, podcast, or live station</Text>
               </View>
             </View>
           </BlurView>
@@ -101,78 +178,86 @@ export default function DesktopPlayerBar() {
     );
   }
 
+  const getImage = () => {
+    if (!image) return null;
+    if (typeof image === 'string') return { uri: image };
+    if (image.uri) return { uri: image.uri };
+    return image;
+  };
+
   return (
-    <Animated.View style={[S.barContainer, { transform: [{ translateY: slideAnim }] }]} pointerEvents="box-none">
+    <Animated.View style={[S.barContainer, { transform: [{ translateY: slideAnim }] }]}>
       <BlurView intensity={80} tint="dark" style={S.bar}>
-        {/* ── Progress track at very top of bar ── */}
-      <View style={S.progressTrack}>
-        <Animated.View
-          style={[
-            S.progressFill,
-            {
-              width: progressWidth.interpolate({
-                inputRange: [0, 100],
-                outputRange: ['0%', '100%'],
-              }),
-            },
-          ]}
-        />
-      </View>
-
-      {/* ── Left: artwork + title ── */}
-      <TouchableOpacity style={S.left} onPress={goToPlayer} activeOpacity={0.8}>
-        <Image source={{ uri: currentPodcast.image }} style={S.artwork} resizeMode="cover" />
-        <View style={S.meta}>
-          <Text style={S.title} numberOfLines={1}>{currentPodcast.title}</Text>
-          <Text style={S.creator} numberOfLines={1}>{currentPodcast.creator}</Text>
+        <View style={S.progressTrack}>
+          <Animated.View
+            style={[
+              S.progressFill,
+              {
+                width: progressWidth.interpolate({
+                  inputRange: [0, 100],
+                  outputRange: ['0%', '100%'],
+                }),
+              },
+            ]}
+          />
         </View>
-      </TouchableOpacity>
 
-      {/* ── Center: playback controls ── */}
-      <View style={S.center}>
-        <Text style={S.timeText}>{formatTime(progress)}</Text>
-
-        <TouchableOpacity style={S.iconBtn} onPress={() => seekTo(Math.max(0, progress - 15))} activeOpacity={0.7}>
-          <Ionicons name="play-back" size={20} color="rgba(255,255,255,0.6)" />
+        <TouchableOpacity style={S.left} onPress={goToPlayer} activeOpacity={0.8}>
+          {getImage() ? (
+            <Image source={getImage()} style={S.artwork} resizeMode="cover" />
+          ) : (
+            <View style={[S.artwork, { backgroundColor: '#2A0808', justifyContent: 'center', alignItems: 'center' }]}>
+              <Ionicons name="musical-note" size={20} color="rgba(255,255,255,0.3)" />
+            </View>
+          )}
+          <View style={S.meta}>
+            <Text style={S.title} numberOfLines={1}>{title}</Text>
+            <Text style={S.creator} numberOfLines={1}>{subtitle}</Text>
+          </View>
         </TouchableOpacity>
 
-        <TouchableOpacity
-          style={S.playBtn}
-          onPress={isPlaying ? pausePodcast : resumePodcast}
-          activeOpacity={0.85}
-        >
-          <LinearGradient
-            colors={['#EC4899', '#8B5CF6']}
-            style={S.playGradient}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
+        <View style={S.center}>
+          <Text style={S.timeText}>{formatTime(progress)}</Text>
+
+          <TouchableOpacity style={S.iconBtn} activeOpacity={0.7}>
+            <Ionicons name="play-back" size={20} color="rgba(255,255,255,0.6)" />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={S.playBtn}
+            onPress={togglePlayPause}
+            activeOpacity={0.85}
           >
-            <Ionicons name={isPlaying ? 'pause' : 'play'} size={22} color="#FFFFFF" />
-          </LinearGradient>
-        </TouchableOpacity>
+            <LinearGradient
+              colors={['#EC4899', '#8B5CF6']}
+              style={S.playGradient}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+            >
+              <Ionicons name={isPlaying ? 'pause' : 'play'} size={22} color="#FFFFFF" />
+            </LinearGradient>
+          </TouchableOpacity>
 
-        <TouchableOpacity style={S.iconBtn} onPress={() => seekTo(Math.min(duration, progress + 30))} activeOpacity={0.7}>
-          <Ionicons name="play-forward" size={20} color="rgba(255,255,255,0.6)" />
-        </TouchableOpacity>
+          <TouchableOpacity style={S.iconBtn} activeOpacity={0.7}>
+            <Ionicons name="play-forward" size={20} color="rgba(255,255,255,0.6)" />
+          </TouchableOpacity>
 
-        <Text style={S.timeText}>{formatTime(duration)}</Text>
-      </View>
+          <Text style={S.timeText}>{formatTime(duration)}</Text>
+        </View>
 
-      {/* ── Right: stop / open ── */}
-      <View style={S.right}>
-        <TouchableOpacity style={S.iconBtn} onPress={goToPlayer} activeOpacity={0.7}>
-          <Ionicons name="expand-outline" size={18} color="rgba(255,255,255,0.6)" />
-        </TouchableOpacity>
-        <TouchableOpacity style={S.iconBtn} onPress={stopPodcast} activeOpacity={0.7}>
-          <Ionicons name="close-circle-outline" size={20} color="rgba(255,255,255,0.5)" />
-        </TouchableOpacity>
-      </View>
+        <View style={S.right}>
+          <TouchableOpacity style={S.iconBtn} onPress={goToPlayer} activeOpacity={0.7}>
+            <Ionicons name="expand-outline" size={18} color="rgba(255,255,255,0.6)" />
+          </TouchableOpacity>
+          <TouchableOpacity style={S.iconBtn} onPress={stopPlayback} activeOpacity={0.7}>
+            <Ionicons name="close-circle-outline" size={20} color="rgba(255,255,255,0.5)" />
+          </TouchableOpacity>
+        </View>
       </BlurView>
     </Animated.View>
   );
 }
 
-// ── Styles ────────────────────────────────────────────────────────────────────
 const BAR_HEIGHT = 80;
 
 const S = StyleSheet.create({
@@ -203,8 +288,6 @@ const S = StyleSheet.create({
     overflow: 'hidden',
     gap: 0,
   },
-
-  // Top progress strip
   progressTrack: {
     position: 'absolute',
     top: 0, left: 0, right: 0,
@@ -215,8 +298,6 @@ const S = StyleSheet.create({
     height: '100%',
     backgroundColor: '#8B5CF6',
   },
-
-  // Sections
   left: {
     flex: 1,
     flexDirection: 'row',
@@ -238,8 +319,6 @@ const S = StyleSheet.create({
     justifyContent: 'flex-end',
     gap: 6,
   },
-
-  // Left section
   artwork: {
     width: 44, height: 44, borderRadius: 8,
     backgroundColor: '#2A0808',
@@ -248,8 +327,6 @@ const S = StyleSheet.create({
   meta: { flex: 1, minWidth: 0 },
   title: { fontSize: 13, fontWeight: '700', color: '#FFFFFF', marginBottom: 2 },
   creator: { fontSize: 11, color: 'rgba(255,255,255,0.5)' },
-
-  // Center section
   playBtn: {
     width: 42, height: 42, borderRadius: 21, overflow: 'hidden',
     shadowColor: '#8B5CF6', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.5, shadowRadius: 6,
@@ -260,15 +337,11 @@ const S = StyleSheet.create({
     justifyContent: 'center', alignItems: 'center',
   },
   timeText: { fontSize: 11, color: 'rgba(255,255,255,0.45)', fontWeight: '500', minWidth: 38, textAlign: 'center' },
-
-  // Right section
   iconBtn: {
     width: 34, height: 34, borderRadius: 17,
     justifyContent: 'center', alignItems: 'center',
     backgroundColor: 'rgba(255,255,255,0.05)',
   },
-
-  // Idle state
   idleCenter: {
     flex: 1,
     flexDirection: 'row',

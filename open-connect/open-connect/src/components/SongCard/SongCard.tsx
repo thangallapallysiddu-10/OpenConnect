@@ -1,12 +1,14 @@
 import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
-import React, { useRef } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { Animated, Image, Text, Pressable, TouchableOpacity, useWindowDimensions, View } from 'react-native';
 import { colors } from '../../constants/colors';
 import { useScaleAnimation } from '../../utils/animations';
 import { useTheme } from '../../context/ThemeContext';
 import { useFavorites } from '../../context/FavoritesContext';
+import { useAudio } from '../../context/AudioContext';
+import { usePlayer } from '../../context/PlayerContext';
 import { styles } from './styles';
 
 interface SongCardProps {
@@ -15,7 +17,7 @@ interface SongCardProps {
   title: string;
   artist: string;
   trackData: any;
-  index?: number; // for stagger delay
+  index?: number;
 }
 
 export const SongCard = ({ id, image, title, artist, trackData, index = 0 }: SongCardProps) => {
@@ -24,10 +26,43 @@ export const SongCard = ({ id, image, title, artist, trackData, index = 0 }: Son
   const { isFavorite, toggleFavorite } = useFavorites();
   const { width: windowWidth } = useWindowDimensions();
 
-  // Clamp the card width dynamically for web/desktop screen sizes
+  // ── Audio Context (Songs) ──
+  const { 
+    currentTrack, 
+    isPlaying: audioIsPlaying, 
+    playTrack, 
+    pauseTrack, 
+    resumeTrack 
+  } = useAudio();
+
+  // ── Player Context (Podcasts) ──
+  const {
+    currentPodcast,
+    isPlaying: podcastIsPlaying,
+    playPodcast,
+    pausePodcast,
+    resumePodcast
+  } = usePlayer();
+
+  // ── LOCAL STATE for play/pause ──
+  const [isThisPlaying, setIsThisPlaying] = useState(false);
+
+  // ── UPDATE when player state changes ──
+  useEffect(() => {
+    let playing = false;
+    
+    if (trackData?.type === 'podcast' || trackData?.episodes !== undefined) {
+      playing = currentPodcast?.id === id && podcastIsPlaying;
+    } else {
+      playing = currentTrack?.id === id && audioIsPlaying;
+    }
+    
+    setIsThisPlaying(playing);
+  }, [currentTrack, audioIsPlaying, currentPodcast, podcastIsPlaying, id]);
+
   const cardWidth = Math.min(windowWidth * 0.28, 140);
 
-  // ── Entrance: fade + slide up with stagger delay ─────────────────────────
+  // ── Entrance animation ──
   const entranceProgress = useRef(new Animated.Value(0)).current;
   React.useEffect(() => {
     Animated.timing(entranceProgress, {
@@ -51,7 +86,7 @@ export const SongCard = ({ id, image, title, artist, trackData, index = 0 }: Son
     ],
   };
 
-  // ── Play overlay fades in on press ───────────────────────────────────────
+  // ── Play overlay ──
   const overlayOpacity = useRef(new Animated.Value(0)).current;
 
   const handlePressIn = () => {
@@ -64,6 +99,7 @@ export const SongCard = ({ id, image, title, artist, trackData, index = 0 }: Son
   };
 
   const handlePressOut = () => {
+    onPressOut();
     Animated.timing(overlayOpacity, {
       toValue: 0,
       duration: 200,
@@ -71,7 +107,7 @@ export const SongCard = ({ id, image, title, artist, trackData, index = 0 }: Son
     }).start();
   };
 
-  // ── Hover Animations (Web) ────────────────────────────────────────────────
+  // ── Hover Animations ──
   const hoverScale = useRef(new Animated.Value(1)).current;
   const glowOpacity = useRef(new Animated.Value(0)).current;
 
@@ -87,6 +123,54 @@ export const SongCard = ({ id, image, title, artist, trackData, index = 0 }: Son
       Animated.spring(hoverScale, { toValue: 1, useNativeDriver: false, speed: 20 }),
       Animated.timing(glowOpacity, { toValue: 0, duration: 200, useNativeDriver: false })
     ]).start();
+  };
+
+  // ── HANDLE PLAY/PAUSE ──
+  const handlePlayPause = (e: any) => {
+    e.stopPropagation();
+    
+    console.log(`🎯 CLICKED: ${title}`);
+    
+    // ── TOGGLE LOCAL STATE IMMEDIATELY ──
+    setIsThisPlaying(!isThisPlaying);
+    
+    // ── PODCAST ──
+    if (trackData?.type === 'podcast' || trackData?.episodes !== undefined) {
+      const isSame = currentPodcast?.id === id;
+      if (isSame) {
+        podcastIsPlaying ? pausePodcast() : resumePodcast();
+      } else {
+        const podcastData = trackData || { 
+          id, 
+          title, 
+          creator: artist, 
+          image: typeof image === 'object' ? image.uri : image,
+          duration: '0'
+        };
+        playPodcast(podcastData, 0);
+      }
+      return;
+    }
+    
+    // ── SONG ──
+    const isSame = currentTrack?.id === id;
+    if (isSame) {
+      audioIsPlaying ? pauseTrack() : resumeTrack();
+    } else {
+      if (podcastIsPlaying) {
+        pausePodcast();
+      }
+      
+      const track = {
+        id,
+        title,
+        artist,
+        image,
+        uri: trackData?.uri || 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3',
+      };
+      
+      playTrack(track);
+    }
   };
 
   const borderCol = theme === 'dark' ? 'rgba(255, 255, 255, 0.16)' : 'rgba(0, 0, 0, 0.12)';
@@ -121,28 +205,78 @@ export const SongCard = ({ id, image, title, artist, trackData, index = 0 }: Son
         >
           <Image source={image} style={styles.image} />
           
-          {/* Like Button overlay */}
           <TouchableOpacity 
             style={{ position: 'absolute', top: 8, right: 8, zIndex: 20, padding: 4 }}
             onPress={(e) => {
               e.stopPropagation();
-              toggleFavorite({ id, title, subtitle: artist, image, type: 'song', rawData: trackData });
+              toggleFavorite({ 
+  id: id,
+  title: title,
+  subtitle: artist,
+  image: image,
+  type: 'song', 
+  rawData: {     
+    id: id,
+    title: title,
+    artist: artist,
+    image: image,
+    uri: trackData?.uri || 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3'
+  }
+});
             }}
           >
-             <Ionicons name={isFavorite(id) ? "heart" : "heart-outline"} size={22} color={isFavorite(id) ? "#EC4899" : "rgba(255,255,255,0.8)"} />
+            <Ionicons 
+              name={isFavorite(id) ? "heart" : "heart-outline"} 
+              size={22} 
+              color={isFavorite(id) ? "#EC4899" : "rgba(255,255,255,0.8)"} 
+            />
           </TouchableOpacity>
 
           <LinearGradient
             colors={['transparent', 'rgba(0,0,0,0.6)']}
             style={[styles.imageOverlay, { height: cardWidth * 0.4 }]}
           />
-          {/* Play overlay — appears on press */}
+          
           <Animated.View style={[styles.playOverlay, { opacity: overlayOpacity }]}>
             <BlurView intensity={60} tint="dark" style={styles.playOverlayBlur}>
-              <Ionicons name="play" size={16} color={colors.textPrimary} />
+              <Ionicons 
+                name={isThisPlaying ? 'pause' : 'play'} 
+                size={16} 
+                color={colors.textPrimary} 
+              />
             </BlurView>
           </Animated.View>
+
+          {/* ✅ PLAY/PAUSE BUTTON */}
+          <TouchableOpacity
+            style={{
+              position: 'absolute',
+              bottom: 8,
+              right: 8,
+              backgroundColor: '#1DB954',
+              borderRadius: 20,
+              width: 32,
+              height: 32,
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 10,
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.3,
+              shadowRadius: 4,
+              elevation: 4,
+            }}
+            onPress={handlePlayPause}
+          >
+            <Ionicons 
+              name={isThisPlaying ? 'pause' : 'play'} 
+              size={16} 
+              color="#fff" 
+              style={isThisPlaying ? undefined : { marginLeft: 2 }}
+            />
+          </TouchableOpacity>
         </Animated.View>
+        
         <Text style={[styles.title, { color: themeColors.text }]} numberOfLines={1}>
           {title}
         </Text>

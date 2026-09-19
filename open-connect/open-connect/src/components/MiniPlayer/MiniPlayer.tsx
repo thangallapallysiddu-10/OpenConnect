@@ -1,185 +1,269 @@
-import { Ionicons } from '@expo/vector-icons';
-import { BlurView } from 'expo-blur';
-import { LinearGradient } from 'expo-linear-gradient';
-import { router } from 'expo-router';
-import React, { useEffect, useRef } from 'react';
-import { Animated, Image, Text, TouchableOpacity, View } from 'react-native';
-import { colors } from '../../constants/colors';
-import { useAudio } from '../../context/AudioContext';
-import {
-  AnimatedPressable,
-  useBounceAnimation,
-  useSlideUpEntrance,
-} from '../../utils/animations';
-import { styles } from './styles';
+/**
+ * SongMiniPlayer.tsx
+ *
+ * A bottom-anchored mini player for songs (AudioContext).
+ * - Slides up when a track is loaded, slides down when stopped.
+ * - Matches the visual style of PodcastMiniPlayer.
+ * - Tapping the bar navigates to /now-player (full screen player).
+ * - Hidden on /now-player itself so it doesn't overlap.
+ * - Stacks above PodcastMiniPlayer when both are visible
+ *   (handled by _layout.tsx render order + bottom offset).
+ */
 
-export const MiniPlayer = () => {
+import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import { router, usePathname } from 'expo-router';
+import React, { useEffect, useRef } from 'react';
+import {
+  Animated,
+  Image,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import { useAudio } from '../../context/AudioContext';
+
+// Pages where the mini player should NOT appear
+const HIDDEN_ON = ['/now-player'];
+
+export default function SongMiniPlayer() {
+  const pathname = usePathname();
   const {
     currentTrack,
     isPlaying,
+    isLoading,
+    position,
+    duration,
     pauseTrack,
     resumeTrack,
     playNext,
     playPrevious,
-    seekForward,
-    seekBackward,
-    position,
-    duration,
   } = useAudio();
 
-  // ── Slide-up entrance when MiniPlayer first mounts ──────────────────────
-  const entranceStyle = useSlideUpEntrance(70, 320);
+  // ── Slide animation ─────────────────────────────────────────────────────────
+  const slideAnim = useRef(new Animated.Value(100)).current;
 
-  // ── Play button bounce on press ──────────────────────────────────────────
-  const { bounceStyle: playBounceStyle, triggerBounce } = useBounceAnimation();
-
-  // ── Pulsing glow behind play button when track is playing ────────────────
-  const glowAnim = useRef(new Animated.Value(0.4)).current;
   useEffect(() => {
-    if (isPlaying) {
-      Animated.loop(
-        Animated.sequence([
-          Animated.timing(glowAnim, {
-            toValue: 1,
-            duration: 900,
-            useNativeDriver: true,
-          }),
-          Animated.timing(glowAnim, {
-            toValue: 0.4,
-            duration: 900,
-            useNativeDriver: true,
-          }),
-        ])
-      ).start();
-    } else {
-      glowAnim.setValue(0.4);
-    }
-  }, [isPlaying]);
+    Animated.spring(slideAnim, {
+      toValue: currentTrack ? 0 : 100,
+      useNativeDriver: true,
+      tension: 65,
+      friction: 10,
+    }).start();
+  }, [currentTrack]);
 
-  // ── Track image gentle scale on track change ─────────────────────────────
-  const imageScale = useRef(new Animated.Value(0.88)).current;
+  // ── Progress bar width animation ────────────────────────────────────────────
+  const progressWidth = useRef(new Animated.Value(0)).current;
+
   useEffect(() => {
-    if (currentTrack) {
-      Animated.spring(imageScale, {
-        toValue: 1,
-        useNativeDriver: true,
-        tension: 80,
-        friction: 8,
-      }).start();
-    }
-  }, [currentTrack?.id]);
+    const pct = duration > 0 ? (position / duration) * 100 : 0;
+    Animated.timing(progressWidth, {
+      toValue: pct,
+      duration: 300,
+      useNativeDriver: false, // width cannot use native driver
+    }).start();
+  }, [position, duration]);
 
+  // ── Hide guard ──────────────────────────────────────────────────────────────
   if (!currentTrack) return null;
+  if (HIDDEN_ON.some((p) => pathname === p || pathname.startsWith(p + '/')))
+    return null;
 
-  const progress = duration > 0 ? position / duration : 0;
-
-  const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = Math.floor(seconds % 60);
-    return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
-  };
-
-  const handlePlayPause = () => {
-    triggerBounce();
-    isPlaying ? pauseTrack() : resumeTrack();
+  // ── Helpers ─────────────────────────────────────────────────────────────────
+  const fmt = (s: number) => {
+    const m = Math.floor(s / 60);
+    const sec = Math.floor(s % 60);
+    return `${m}:${sec.toString().padStart(2, '0')}`;
   };
 
   return (
-    <Animated.View style={[styles.container, entranceStyle]}>
-      <BlurView intensity={100} tint="dark" style={styles.blurContainer}>
-        {/* Progress bar at top */}
-        <View style={[styles.progressBarTrack]}>
-  <LinearGradient
-    colors={[colors.primary, colors.primaryLight]}
-    start={{ x: 0, y: 0 }}
-    end={{ x: 1, y: 0 }}
-    style={[styles.progressBarFill, { width: `${progress * 100}%` }]}
-  />
-</View>
+    <Animated.View
+      style={[styles.container, { transform: [{ translateY: slideAnim }] }]}
+    >
+      {/* Tapping the bar body opens the full player */}
+      <TouchableOpacity
+        style={styles.playerContent}
+        onPress={() => router.push('/now-player')}
+        activeOpacity={0.9}
+      >
+        {/* Album art */}
+        <Image source={currentTrack.image} style={styles.artwork} />
 
-        <View style={styles.content}>
-          {/* Track info — tapping navigates to full player */}
-          <TouchableOpacity
-            style={styles.trackInfo}
-            activeOpacity={0.7}
-            onPress={() => router.push('/now-player')}
-          >
-            <Animated.View style={{ transform: [{ scale: imageScale }] }}>
-              <Image source={currentTrack.image} style={styles.image} />
-            </Animated.View>
-            <View style={styles.textInfo}>
-              <Text style={styles.title} numberOfLines={1}>
-                {currentTrack.title}
-              </Text>
-              <Text style={styles.artist} numberOfLines={1}>
-                {currentTrack.artist}
-              </Text>
-            </View>
-          </TouchableOpacity>
+        {/* Info + progress */}
+        <View style={styles.infoContainer}>
+          <Text style={styles.title} numberOfLines={1}>
+            {currentTrack.title}
+          </Text>
+          <Text style={styles.artist} numberOfLines={1}>
+            {currentTrack.artist}
+          </Text>
 
-          {/* Controls */}
-          <View style={styles.controls}>
-            <AnimatedPressable
-              onPress={playPrevious}
-              style={styles.controlButton}
-              scaleTo={0.85}
-            >
-              <Ionicons name="play-skip-back" size={20} color={colors.textPrimary} />
-            </AnimatedPressable>
-
-            <AnimatedPressable
-              onPress={seekBackward}
-              style={styles.seekButton}
-              scaleTo={0.88}
-            >
-              <Ionicons name="play-back" size={16} color={colors.textSecondary} />
-              <Text style={styles.seekText}>10</Text>
-            </AnimatedPressable>
-
-            {/* Play / Pause with glow + bounce */}
-            <View style={styles.playButtonWrapper}>
-              <Animated.View
-                style={[
-                  styles.playButtonGlow,
-                  { opacity: glowAnim },
-                ]}
-              />
-              <AnimatedPressable
-                onPress={handlePlayPause}
-                style={styles.playButton}
-                scaleTo={0.9}
-              >
-                <Animated.View style={playBounceStyle}>
-                  <Ionicons
-                    name={isPlaying ? 'pause' : 'play'}
-                    size={24}
-                    color={colors.textPrimary}
-                  />
-                </Animated.View>
-              </AnimatedPressable>
-            </View>
-
-            <AnimatedPressable
-              onPress={seekForward}
-              style={styles.seekButton}
-              scaleTo={0.88}
-            >
-              <Ionicons name="play-forward" size={16} color={colors.textSecondary} />
-              <Text style={styles.seekText}>10</Text>
-            </AnimatedPressable>
-
-            <AnimatedPressable
-              onPress={playNext}
-              style={styles.controlButton}
-              scaleTo={0.85}
-            >
-              <Ionicons name="play-skip-forward" size={20} color={colors.textPrimary} />
-            </AnimatedPressable>
+          {/* Progress bar */}
+          <View style={styles.progressBarContainer}>
+            <Animated.View
+              style={[
+                styles.progressBar,
+                {
+                  width: progressWidth.interpolate({
+                    inputRange: [0, 100],
+                    outputRange: ['0%', '100%'],
+                  }),
+                },
+              ]}
+            />
           </View>
 
-          <Text style={styles.timeText}>{formatTime(position)}</Text>
+          {/* Time stamps */}
+          <View style={styles.timeContainer}>
+            <Text style={styles.timeText}>{fmt(position)}</Text>
+            <Text style={styles.timeText}>{fmt(duration)}</Text>
+          </View>
         </View>
-      </BlurView>
+
+        {/* Controls — stopPropagation via their own onPress */}
+        <View style={styles.controls}>
+          {/* Previous */}
+          <TouchableOpacity
+            onPress={(e) => {
+              e.stopPropagation?.();
+              playPrevious();
+            }}
+            style={styles.skipButton}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Ionicons name="play-skip-back" size={16} color="rgba(255,255,255,0.7)" />
+          </TouchableOpacity>
+
+          {/* Play / Pause */}
+          <TouchableOpacity
+            onPress={(e) => {
+              e.stopPropagation?.();
+              isPlaying ? pauseTrack() : resumeTrack();
+            }}
+            style={styles.playButton}
+          >
+            <LinearGradient
+              colors={['#7C3AED', '#4C1D95']}
+              style={styles.playButtonGradient}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+            >
+              {isLoading ? (
+                <Ionicons name="hourglass" size={16} color="#FFFFFF" />
+              ) : (
+                <Ionicons
+                  name={isPlaying ? 'pause' : 'play'}
+                  size={16}
+                  color="#FFFFFF"
+                />
+              )}
+            </LinearGradient>
+          </TouchableOpacity>
+
+          {/* Next */}
+          <TouchableOpacity
+            onPress={(e) => {
+              e.stopPropagation?.();
+              playNext();
+            }}
+            style={styles.skipButton}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Ionicons name="play-skip-forward" size={16} color="rgba(255,255,255,0.7)" />
+          </TouchableOpacity>
+        </View>
+      </TouchableOpacity>
     </Animated.View>
   );
-};
+}
+
+const styles = StyleSheet.create({
+  container: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: '#0D0520',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(139,92,246,0.35)',
+    elevation: 12,
+    zIndex: 1001, // sits above PodcastMiniPlayer (1000) when both visible
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -3 },
+    shadowOpacity: 0.35,
+    shadowRadius: 6,
+  },
+  playerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    gap: 12,
+  },
+  artwork: {
+    width: 50,
+    height: 50,
+    borderRadius: 8,
+    backgroundColor: '#1E0A3C',
+  },
+  infoContainer: {
+    flex: 1,
+  },
+  title: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    marginBottom: 2,
+  },
+  artist: {
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.5)',
+    marginBottom: 6,
+  },
+  progressBarContainer: {
+    height: 2,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderRadius: 1,
+    overflow: 'hidden',
+    marginBottom: 4,
+  },
+  progressBar: {
+    height: '100%',
+    backgroundColor: '#7C3AED',
+    borderRadius: 1,
+  },
+  timeContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  timeText: {
+    fontSize: 9,
+    color: 'rgba(255,255,255,0.3)',
+  },
+  controls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  skipButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.08)',
+  },
+  playButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    overflow: 'hidden',
+  },
+  playButtonGradient: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+});
