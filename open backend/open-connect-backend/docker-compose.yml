@@ -19,7 +19,7 @@ services:
   postgres:
     image: postgres:16-alpine
     environment: { POSTGRES_USER: openconnect, POSTGRES_PASSWORD: openconnect_secret, POSTGRES_DB: openconnect }
-    ports: ["5432:5432"]
+    ports: ["5433:5432"]
     volumes: ["postgres_data:/var/lib/postgresql/data"]
     healthcheck: { test: ["CMD-SHELL","pg_isready -U openconnect -d openconnect"], interval: 5s, timeout: 5s, retries: 10 }
   redis:
