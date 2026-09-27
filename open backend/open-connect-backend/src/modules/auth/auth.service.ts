@@ -29,7 +29,7 @@ export async function login(input: LoginInput) {
   return { user:safeUser(user), tokens:await issue(user, device.id) };
 }
 
-export async function refresh(token: string, deviceKey: string) {
+export async function refresh(token: string) {
   let payload: ReturnType<typeof verifyRefreshToken>;
 
   try {
