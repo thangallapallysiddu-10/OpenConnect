@@ -1,190 +1,209 @@
 # Open Connect Frontend — Architecture & Structure Reference
 
+> **Source of truth:** This document is generated from reading the actual source files under
+> `open-connect/open-connect/`. Every claim below is traceable to a specific file.
+
+---
+
 ## 1. Executive Summary
 
-**Open Connect Frontend** (also branded as **Melody Meet** in the desktop layout) is a universal, cross-platform mobile and web application built with **React Native**, **Expo (SDK 54)**, and **Expo Router (v6)**.
+**Open Connect Frontend** is a universal cross-platform app built with **Expo SDK 54** and
+**React Native 0.81**. It delivers a music, podcast, and live radio streaming experience across
+iOS, Android, and web (static export).
 
-The frontend delivers a music, podcast, and live radio streaming experience across:
-* **Mobile Platforms:** iOS and Android via React Native native runtime.
-* **Web / Desktop Platforms:** Responsive desktop web interface featuring a 3-column layout matching desktop Spotify.
-* **Audio & Broadcast Streaming:** Background audio playback, full-screen audio player with rotating vinyl art, podcast playback with speed/sleep timers, and interactive live radio sessions.
-* **Creator & Community Tools:** In-app audio recording studio for podcasts, listener shoutouts/RJ requests, multi-entity favorites, and content reporting.
-
----
-
-## 2. Technology Stack & Dependencies
-
-| Category | Technology | Version | Purpose / Details |
-| :--- | :--- | :--- | :--- |
-| **Framework & Engine** | Expo SDK | `~54.0.34` | Universal React Native application framework |
-| **Core Libraries** | React & React Native | `19.1.0` / `0.81.5` | Component model, hooks, and mobile primitives |
-| **Routing & Navigation**| Expo Router | `~6.0.23` | File-based typed navigation built on `@react-navigation` |
-| **Navigation Primitives**| `@react-navigation/*` | `v7` | Bottom tabs, native stacks, and navigation containers |
-| **Styling** | NativeWind & Tailwind CSS | `^4.2.3` / `^3.4.19`| Utility-first styling adapted for React Native |
-| **Visual Effects** | `expo-linear-gradient`, `expo-blur` | `~15.0.8` | Glassmorphic blurs and gradient overlays |
-| **Audio Playback** | `expo-av` & `expo-audio` | `~16.0.8` / `~1.1.1`| Audio engine: streaming, playback progress, seeking, and recording |
-| **Animations** | `react-native-reanimated` & `Animated` | `~4.1.1` | 60fps UI animations, gestures, and scale feedback |
-| **Vector Icons** | `@expo/vector-icons` (Ionicons) | `^15.0.3` | Comprehensive icon set across all screens |
-| **Media & Files** | `expo-file-system`, `expo-image` | Latest | Device key persistence and cached image rendering |
-| **Haptics & System** | `expo-haptics`, `expo-status-bar` | Latest | Tactile touch feedback and dynamic status bar styling |
+Key capabilities:
+- Music playback via `HTMLAudioElement` (web) with a 6-track built-in sample queue
+- Podcast playback via `HTMLAudioElement` with per-episode progress tracking
+- Live radio session UI (local state; no Socket.IO connection from the frontend yet)
+- Responsive dual-layout: Spotify-style 3-column desktop at ≥900 px, mobile tab bar below
+- Full auth lifecycle: register, login, token refresh, session hydration on boot
+- Favourites persisted to `localStorage` (`@open_connect_favorites`)
+- Resilient data layer: every screen falls back to local mock data if the backend is unavailable
 
 ---
 
-## 3. High-Level Architectural Design
+## 2. Technology Stack
 
-The frontend implements a **Responsive Dual-Layout Engine** based on a screen width breakpoint (`DESKTOP_BREAKPOINT = 900px`):
+| Category | Technology | Version |
+|---|---|---|
+| Framework | Expo SDK | `~54.0.37` |
+| Core | React / React Native | `19.1.0` / `0.81.5` |
+| Routing | Expo Router | `~6.0.24` |
+| Navigation primitives | `@react-navigation/native` | `^7.1.8` |
+| Styling | NativeWind + Tailwind CSS | `^4.2.3` / `^3.4.19` |
+| Audio engine | `HTMLAudioElement` (browser API) | — |
+| Animations | `react-native-reanimated` + `Animated` API | `~4.1.1` |
+| Visual effects | `expo-linear-gradient`, `expo-blur` | `~15.0.8` |
+| Icons | `@expo/vector-icons` (Ionicons) | `^15.0.3` |
+| Media / Files | `expo-file-system`, `expo-image` | latest |
+| Haptics | `expo-haptics` | latest |
+| TypeScript | — | `^5.9.2` |
+
+> **Audio note:** Neither `expo-av` (`Audio.Sound`) nor `expo-audio` is used for playback logic.
+> Both `AudioContext` (music) and `PlayerContext` (podcasts) drive a `new Audio(uri)` browser
+> `HTMLAudioElement`. The packages remain in `package.json` but are not imported by any context.
+
+---
+
+## 3. High-Level Architecture
 
 ```
-                        ┌─────────────────────────────────────┐
-                        │      Expo Root (_layout.tsx)        │
-                        │  9 Context Providers + Root Modals  │
-                        └──────────────────┬──────────────────┘
-                                           │
-                        ┌──────────────────┴──────────────────┐
-                 Width >= 900px                         Width < 900px
-                        ▼                                     ▼
-        ┌───────────────────────────────┐     ┌───────────────────────────────┐
-        │        DesktopLayout          │     │         MobileLayout          │
-        │  ┌─────────┬────────┬───────┐ │     │  ┌─────────────────────────┐  │
-        │  │ Left    │ Center │ Right │ │     │  │ AppStack (Screen Content│  │
-        │  │ Sidebar │ Content│ Side- │ │     │  ├─────────────────────────┤  │
-        │  │ (240px) │ + Top  │ bar   │ │     │  │ Floating Mini Players   │  │
-        │  │         │ Nav    │       │ │     │  ├─────────────────────────┤  │
-        │  ├─────────┴────────┴───────┤ │     │  │ MobileTabBar (5 Tabs)   │  │
-        │  │ Persistent Desktop Player│ │     │  └─────────────────────────┘  │
-        │  └──────────────────────────┘ │     └───────────────────────────────┘
-        └───────────────────────────────┘
+app/_layout.tsx  (RootLayout)
+│
+└── SafeAreaProvider
+    └── ThemeProvider
+        └── AuthProvider
+            └── PremiumProvider
+                └── NotificationProvider
+                    └── AudioProvider
+                        └── PodcastProvider
+                            └── PlayerProvider
+                                └── FilterProvider
+                                    └── FavoritesProvider
+                                        └── RJLiveProvider
+                                            └── RootLayoutContent
+                                                │
+                                                ├── width >= 900 → DesktopLayout
+                                                │     ├── DesktopSidebar (240 px fixed)
+                                                │     ├── Center: DesktopTopNav + AppStack
+                                                │     ├── DesktopRightSidebar
+                                                │     └── DesktopPlayerBar (full-width bottom)
+                                                │
+                                                ├── width < 900  → MobileLayout
+                                                │     ├── AppStack
+                                                │     ├── PodcastMiniPlayer (floating)
+                                                │     ├── RJLiveMiniPlayer  (floating)
+                                                │     └── MobileTabBar
+                                                │
+                                                └── Modals (always rendered, outside layouts)
+                                                      AuthModal, ProfileModal,
+                                                      NotificationsModal, PremiumFeatures
 ```
 
-### Key Architectural Characteristics:
-1. **Adaptive Desktop Mode (Spotify-style):**
-   * **Left Sidebar (`DesktopSidebar`):** Fixed 240px navigation column (Home, Favourites, Podcasts, RJ Live, Live Stations) with user authentication state and premium upsell.
-   * **Center Column (`DesktopTopNav` + Screen Stack):** Search bar, theme switcher, quick notifications, and scrollable screen area.
-   * **Right Sidebar (`DesktopRightSidebar`):** Quick-glance trending tracks and active RJs.
-   * **Persistent Bottom Player (`DesktopPlayerBar`):** Full-width music/podcast player with playback controls, progress scrubber, and volume controls.
-2. **Mobile Mode:**
-   * Standard single-column view with bottom navigation (`MobileTabBar`).
-   * Floating slide-up mini players (`PodcastMiniPlayer` and `RJLiveMiniPlayer`) that appear seamlessly whenever playback is initiated.
-3. **Resilient Data Layer (Backend API + Local Fallbacks):**
-   * Network requests go through [`src/services/api.ts`](file:///c:/Kravix/open-connect/open-connect/src/services/api.ts), pointing to `http://localhost:3000/api/v1` (or `http://10.0.2.2:3000/api/v1` on Android).
-   * If the backend server is offline, screens fall back automatically to rich mock datasets in [`src/data/`](file:///c:/Kravix/open-connect/open-connect/src/data/), ensuring the app remains fully functional and testable without infrastructure.
+`DESKTOP_BREAKPOINT = 900` (px) — sourced from `_layout.tsx`.
 
 ---
 
 ## 4. Complete Directory & File Structure
 
 ```
-c:/Kravix/open-connect/open-connect/
+open-connect/open-connect/
 │
-├── package.json                    # Dependencies & Expo scripts
-├── tsconfig.json                   # TypeScript config
-├── app.json                        # Expo app manifest (icons, splash, orientation)
-├── babel.config.js                 # Babel preset with NativeWind
-├── tailwind.config.js              # Tailwind styling definitions
-├── global.css                      # Tailwind base styles
-├── metro.config.js                 # Metro bundler config with NativeWind wrapper
+├── app.json                     # Expo manifest; web.output = "static"
+├── package.json
+├── tsconfig.json
+├── babel.config.js              # Babel preset-expo + NativeWind
+├── tailwind.config.js
+├── global.css                   # Tailwind base styles (imported by _layout.tsx)
+├── metro.config.js              # Metro + NativeWind wrapper
 │
-├── app/                            # Expo Router File-Based Routing
-│   ├── _layout.tsx                 # Root layout, 9 providers, adaptive desktop/mobile switch
-│   ├── index.tsx                   # Home screen (Hero, live radio wave, trending, categories)
-│   ├── search.tsx                  # Full-screen search with filters
-│   ├── favourites.tsx              # Bookmarked items (songs, podcasts, stations, RJs)
-│   ├── now-player.tsx              # Full-screen vinyl record music player
-│   ├── request-rj.tsx              # Route wrapper for RJ shoutout screen
+├── app/                         # Expo Router file-based routes
+│   ├── _layout.tsx              # Root layout: 11 providers + dual-layout switch + global modals
+│   ├── index.tsx                # Home screen
+│   ├── search.tsx               # Search screen
+│   ├── favourites.tsx           # Favourites / library screen
+│   ├── now-player.tsx           # Full-screen music player
+│   ├── request-rj.tsx           # Route wrapper → RequestRJScreen
 │   │
-│   ├── livestations/               # Live Radio & Channels Section
-│   │   ├── _layout.tsx             # Nested stack layout
-│   │   ├── index.tsx               # Redirects to stations
-│   │   ├── stations.tsx            # Live radio station explorer with filters
-│   │   ├── all-channels.tsx        # Video/live TV channel streams
-│   │   └── local-files.tsx         # Local on-device audio file browser & player
+│   ├── podcasts/
+│   │   ├── _layout.tsx
+│   │   ├── index.tsx            # Redirects to discover
+│   │   ├── discover.tsx         # Main podcast discovery feed
+│   │   ├── trending.tsx         # Trending podcasts
+│   │   ├── all-new-podcasts.tsx # Newly released episodes
+│   │   ├── genres.tsx           # Browse by podcast category
+│   │   ├── filtered-results.tsx # Filtered episode results
+│   │   ├── speakers.tsx         # Host / speaker directory
+│   │   ├── category/
+│   │   │   └── [id].tsx         # Dynamic category episode list
+│   │   ├── speaker/
+│   │   │   └── [id].tsx         # Dynamic speaker profile & episodes
+│   │   ├── live-all.tsx         # All active live podcast streams
+│   │   ├── live-player.tsx      # Interactive live podcast room
+│   │   ├── player.tsx           # Full-screen podcast player
+│   │   ├── recording.tsx        # In-app microphone recording studio
+│   │   ├── recording-preview.tsx# Audio preview & publishing
+│   │   ├── report.tsx           # Content reporting reason picker
+│   │   └── report-option.tsx    # Reporting details form
 │   │
-│   ├── podcasts/                   # Podcasts Section
-│   │   ├── _layout.tsx             # Nested stack layout
-│   │   ├── index.tsx               # Redirects to discover
-│   │   ├── discover.tsx            # Main podcast discovery feed
-│   │   ├── trending.tsx            # Trending podcasts list
-│   │   ├── all-new-podcasts.tsx    # Newly released episodes
-│   │   ├── genres.tsx              # Browse by podcast category
-│   │   ├── filtered-results.tsx    # Filtered episode results
-│   │   ├── speakers.tsx            # Host / speaker directory
-│   │   ├── speaker/[id].tsx        # Dynamic speaker profile & episodes
-│   │   ├── category/[id].tsx       # Dynamic category episode list
-│   │   ├── live-all.tsx            # All active live podcast streams
-│   │   ├── live-player.tsx         # Interactive live podcast room
-│   │   ├── player.tsx              # Full-screen podcast player (speed, sleep timer)
-│   │   ├── recording.tsx           # In-app podcast microphone recording studio
-│   │   ├── recording-preview.tsx   # Audio preview & publishing screen
-│   │   ├── report.tsx              # Content reporting reason selector
-│   │   └── report-option.tsx       # Additional reporting details form
+│   ├── rjs/
+│   │   ├── _layout.tsx
+│   │   ├── index.tsx            # Redirects to stations
+│   │   ├── stations.tsx         # RJ listing & station map
+│   │   ├── artist.tsx           # Artist details & top tracks
+│   │   ├── topsingers.tsx       # Featured singers list
+│   │   ├── album-details.tsx    # Album tracklist & metadata
+│   │   ├── genre.tsx            # Genre-specific song collection
+│   │   ├── live-radio.tsx       # Live radio broadcast interface
+│   │   ├── live-player.tsx      # Live RJ player (chat + reactions)
+│   │   ├── live-event.tsx       # Live event viewer
+│   │   ├── player.tsx           # Secondary audio player
+│   │   └── search.tsx           # RJ & station search
 │   │
-│   └── rjs/                        # Radio Jockeys & Live Radio Section
-│       ├── _layout.tsx             # Nested stack layout
-│       ├── index.tsx               # Redirects to stations
-│       ├── stations.tsx            # RJ listing & station map
-│       ├── artist.tsx              # Artist details & top tracks
-│       ├── topsingers.tsx          # Featured singers list
-│       ├── album-details.tsx       # Album tracklist & metadata
-│       ├── genre.tsx               # Genre-specific song collection
-│       ├── live-radio.tsx          # Live radio broadcast interface
-│       ├── live-player.tsx         # Live RJ player with realtime chat & reactions
-│       ├── live-event.tsx          # Live event viewer
-│       ├── player.tsx              # Secondary audio player
-│       └── search.tsx              # RJ & station search
+│   └── livestations/
+│       ├── _layout.tsx
+│       ├── index.tsx            # Redirects to stations
+│       ├── stations.tsx         # Live radio station explorer
+│       ├── all-channels.tsx     # Video / live TV channel streams
+│       └── local-files.tsx      # On-device audio file browser & player
 │
-└── src/                            # Shared Source Code
-    ├── assets/                     # Local imagery & logos
+└── src/
     │
-    ├── constants/                  # Color palettes & spacing scales
-    │   ├── colors.ts               # Theme colors, gradients, and accents
-    │   └── spacing.ts              # Spacing & sizing scales
+    ├── constants/
+    │   ├── colors.ts            # Shared color tokens (used by now-player.tsx)
+    │   └── spacing.ts           # Spacing / sizing scales
     │
-    ├── context/                    # React Context State Providers
-    │   ├── ThemeContext.tsx        # Light/dark mode state & dynamic colors
-    │   ├── AuthContext.tsx         # User session, JWT tokens, login/register modals
-    │   ├── AudioContext.tsx        # expo-av music playback engine
-    │   ├── PlayerContext.tsx       # Podcast playback progress & timer tracking
-    │   ├── RJLiveContext.tsx       # Radio live broadcast session state
-    │   ├── FavoritesContext.tsx    # Bookmarked items toggling
-    │   ├── FilterContext.tsx       # Language & category filters
-    │   ├── NotificationContext.tsx # User notification alerts
-    │   ├── PodcastContext.tsx      # Active podcast metadata
-    │   └── PremiumContext.tsx      # Premium subscription modal state
+    ├── context/                 # 10 React Context providers (see §5)
+    │   ├── ThemeContext.tsx
+    │   ├── AuthContext.tsx
+    │   ├── AudioContext.tsx
+    │   ├── PlayerContext.tsx
+    │   ├── RJLiveContext.tsx
+    │   ├── FavoritesContext.tsx
+    │   ├── FilterContext.tsx
+    │   ├── NotificationContext.tsx
+    │   ├── PremiumContext.tsx
+    │   └── PodcastContext.tsx
     │
-    ├── components/                 # Reusable UI Components
-    │   ├── AdCarousel/             # Promotional & ad banner slider
-    │   ├── Auth/                   # LoginModal, RegisterModal, ProfileModal, AuthModal
-    │   ├── CategoryButtons/        # Horizontal category chip selector
-    │   ├── DesktopPlayerBar/       # Persistent bottom player on desktop
-    │   ├── DesktopRightSidebar/    # Desktop trending tracks & RJs column
-    │   ├── DesktopSidebar/         # Desktop left 240px navigation bar
-    │   ├── DesktopTopNav/          # Desktop top search & profile bar
-    │   ├── EventCard/              # Upcoming concert / event card
-    │   ├── Header/                 # Standard mobile header
-    │   ├── LiveStationCard/        # Live radio station card with visualizer
-    │   ├── LiveStationCarousel/    # Horizontal carousel of radio stations
-    │   ├── LiveStationPlayer/      # Radio player modal
-    │   ├── MelodyMeet/             # HeroBanner & MoodSelector components
-    │   ├── MiniPlayer/             # General floating mini audio player
-    │   ├── MobileTabBar/           # Fixed 5-tab bottom navigation bar
-    │   ├── Notifications/          # In-app notifications drop-down modal
-    │   ├── PodcastCard/            # Podcast show card
-    │   ├── PodcastMiniPlayer/      # Floating podcast player on mobile
-    │   ├── PremiumFeatures/        # Subscription tier upsell modal
-    │   ├── RJCard/                 # Radio Jockey profile card with live badge
-    │   ├── RJLiveMiniPlayer/       # Floating live radio mini player
-    │   ├── SectionHeader/          # Title + "View All" link header
-    │   └── SongCard/               # Track card with animated play button
+    ├── services/
+    │   ├── api.ts               # Typed fetch wrapper; base URL from EXPO_PUBLIC_API_URL
+    │   ├── auth-session.ts      # Token persistence: localStorage (web) / FileSystem (native)
+    │   └── auth.service.ts      # login(), register(), logout(), refresh(), me(), getDeviceKey()
     │
-    ├── services/                   # Backend Communication Layer
-    │   ├── api.ts                  # Typed fetch wrapper with error handling
-    │   ├── auth-session.ts         # Secure local storage for JWT tokens
-    │   └── auth.service.ts         # Login, register, token refresh, and user profile APIs
+    ├── components/
+    │   ├── AdCarousel/          # Sliding banner ad carousel
+    │   ├── Auth/
+    │   │   ├── AuthModal        # Login / register modal
+    │   │   └── ProfileModal     # Logged-in user profile modal
+    │   ├── CategoryButtons/     # Horizontal category chip selector
+    │   ├── DesktopPlayerBar/    # Persistent bottom player (desktop only)
+    │   ├── DesktopRightSidebar/ # Right column: trending tracks + top RJs
+    │   ├── DesktopSidebar/      # Left 240 px nav sidebar
+    │   ├── DesktopTopNav/       # Top search bar + profile + theme toggle
+    │   ├── EventCard/           # Concert / event card
+    │   ├── Header/              # Standard mobile header
+    │   ├── LiveStationCard/     # Live radio card with waveform visualiser
+    │   ├── LiveStationCarousel/ # Horizontal carousel of radio stations
+    │   ├── LiveStationPlayer/   # Radio player modal
+    │   ├── MelodyMeet/
+    │   │   ├── HeroBanner       # Dynamic mood-based hero banner
+    │   │   └── MoodSelector     # Mood-based playlist picker
+    │   ├── MiniPlayer/          # Generic floating audio mini player
+    │   ├── MobileTabBar/        # 5-tab bottom navigation bar (mobile)
+    │   ├── Notifications/
+    │   │   └── NotificationsModal
+    │   ├── PodcastCard/         # Podcast show card
+    │   ├── PodcastMiniPlayer/   # Floating podcast player (mobile)
+    │   ├── PremiumFeatures/     # Premium subscription upsell modal
+    │   ├── RJCard/              # RJ profile card with live badge
+    │   ├── RJLiveMiniPlayer/    # Floating live radio mini player (mobile)
+    │   ├── SectionHeader/       # Title + "View All" link header
+    │   └── SongCard/            # Track card with animated play button
     │
-    ├── screens/                    # Standalone Screen Components
-    │   └── RequestRJScreen.tsx     # Form for listener shoutouts & song requests
+    ├── screens/
+    │   └── RequestRJScreen.tsx  # RJ shoutout / song request form
     │
-    ├── styles/                     # Dedicated StyleSheet modules
+    ├── styles/
     │   ├── discover.styles.ts
     │   ├── favourites.styles.ts
     │   ├── nowPlaying.styles.ts
@@ -192,156 +211,377 @@ c:/Kravix/open-connect/open-connect/
     │   ├── podcasts.styles.ts
     │   └── search.styles.ts
     │
-    ├── utils/                      # Helper Functions
-    │   └── animations.tsx          # Spring scale animations and touch feedback
+    ├── utils/
+    │   └── animations.tsx       # Spring scale helpers and touch feedback
     │
-    └── data/                       # Local Mock Data (Resilient Fallbacks)
-        ├── ads.ts                  # Banner advertisement items
-        ├── channels.ts             # Video & streaming channels
-        ├── events.ts               # Concerts & live events
-        ├── liveStations.ts         # FM & internet radio stations
-        ├── podcasts.ts             # Featured podcasts and categories
-        ├── rjs.ts                  # RJ profiles
-        ├── rjsLiveStations.ts      # Active live broadcast sessions
-        └── songs.ts                # Tracks, new releases, and recently played
+    └── data/                    # Local mock data (resilient fallbacks)
+        ├── ads.ts
+        ├── channels.ts          # ALL_CHANNELS array + LANGUAGES list (used by home LiveStationPlayer)
+        ├── events.ts
+        ├── liveStations.ts
+        ├── podcasts.ts
+        ├── rjs.ts
+        ├── rjsLiveStations.ts   # RJSStation type + station list (used by RJLiveContext)
+        └── songs.ts             # recentlyPlayed, perfectForYou, newReleases arrays
 ```
 
 ---
 
-## 5. State Management & Context Architecture
+## 5. Context Providers
 
-The application coordinates global state through **10 specialized React Context Providers** nested inside [`app/_layout.tsx`](file:///c:/Kravix/open-connect/open-connect/app/_layout.tsx):
+Provider nesting order is defined in `app/_layout.tsx` (`RootLayout`). The order below is
+outermost → innermost.
 
-| Context Provider | Hook | Primary Responsibilities |
-| :--- | :--- | :--- |
-| **`ThemeProvider`** | `useTheme()` | Toggles between `dark` and `light` mode; provides color palette tokens. |
-| **`AuthProvider`** | `useAuth()` | Manages logged-in user profile, access token, refresh token, session restoration, and triggers `AuthModal` or `ProfileModal`. |
-| **`AudioContext`** | `useAudio()` | Direct audio controller using `expo-av` (`Audio.Sound`): maintains `currentTrack`, `isPlaying`, `position`, `duration`, `playTrack()`, `pauseTrack()`, `seekTo()`, `playNext()`, and `playPrevious()`. |
-| **`PlayerContext`** | `usePlayer()` | Dedicated podcast player state: tracks playback time, duration in seconds, interval timers, and formatting (`formatTime`). |
-| **`RJLiveContext`** | `useRJLive()` | Coordinates live radio station listening, active broadcast session state, and toggles the `RJLiveMiniPlayer`. |
-| **`FavoritesContext`**| `useFavorites()` | Maintains set of bookmarked items (`isFavorite(id)`, `toggleFavorite(item)`). |
-| **`FilterContext`** | `useFilter()` | Manages active language filters (`Hindi`, `English`, `Punjabi`, etc.) and genre categories. |
-| **`NotificationContext`**| `useNotification()` | In-app notification alerts count and modal visibility. |
-| **`PremiumContext`** | `usePremium()` | Premium feature gates and trigger for `PremiumFeatures` subscription modal. |
-| **`PodcastContext`** | `usePodcast()` | Selected podcast category, episode list, and category filtering. |
+`SafeAreaProvider` (from `react-native-safe-area-context`) wraps everything but is not a custom
+context.
+
+### ThemeContext — `useTheme()`
+
+**File:** `src/context/ThemeContext.tsx`
+
+- Default theme: always `'dark'` (ignores system preference at runtime).
+- Exposes `{ theme, isDark, colors, toggleTheme, setTheme }`.
+- `colors` object contains full token palette; switches between `lightThemeColors` and
+  `darkThemeColors` based on `theme` state.
+
+### AuthContext — `useAuth()`
+
+**File:** `src/context/AuthContext.tsx`
+
+- Session hydration on mount: reads tokens from storage → validates access token expiry
+  client-side (JWT payload decode, no network) → calls `GET /users/me` if token looks valid →
+  falls back to `POST /auth/refresh` if access token is expired but refresh token is still valid.
+- Token storage: `localStorage` on web, `expo-file-system` (`documentDirectory` JSON file) on native.
+- Exposes `{ isLoggedIn, loading, accessToken, refreshToken, user, setAuthSession,
+  clearAuthSession, logoutSession, showModal, showAuthModal, hideAuthModal,
+  showProfileModal, openProfile, closeProfile, setLoading }`.
+
+### PremiumContext — `usePremium()`
+
+**File:** `src/context/PremiumContext.tsx`
+
+- Simple modal open/close state: `{ showPremiumModal, openPremiumModal, closePremiumModal }`.
+
+### NotificationContext — `useNotifications()`
+
+**File:** `src/context/NotificationContext.tsx`
+
+- Simple modal open/close state: `{ showNotificationsModal, openNotifications, closeNotifications }`.
+- Note: hook name is **`useNotifications()`** (plural).
+
+### AudioContext — `useAudio()`
+
+**File:** `src/context/AudioContext.tsx`
+
+- Audio engine: **`HTMLAudioElement`** (`new Audio(uri)`). Does not use `expo-av`.
+- Contains a built-in `SAMPLE_TRACKS` array of 6 tracks (all Arijit Singh, soundhelix.com URLs):
+  Kalank, Apna Bana Le, Raabta, Samjhawan, Dooron Dooron, Varoon.
+- Auto-advances to next track in `SAMPLE_TRACKS` when a track ends.
+- Exposes `{ currentTrack, isPlaying, isLoaded, isLoading, position, duration,
+  playTrack, pauseTrack, resumeTrack, clearTrack, playNext, playPrevious,
+  seekTo, seekForward, seekBackward }`.
+- `seekForward` / `seekBackward` jump ±10 seconds.
+- `playTrack(track)`: if the same track is already loaded, toggles play/pause; otherwise loads
+  and plays the new track.
+
+### PodcastContext — `usePodcastContext()`
+
+**File:** `src/context/PodcastContext.tsx`
+
+- Note: hook name is **`usePodcastContext()`** (not `usePodcast`).
+- Stores `{ selectedCountry, selectedCategory, podcasts, setSelectedCountry,
+  setSelectedCategory, setPodcasts }`.
+- `selectedCountry` and `selectedCategory` have their own `{ id, name, ... }` interfaces.
+
+### PlayerContext — `usePlayer()`
+
+**File:** `src/context/PlayerContext.tsx`
+
+- Podcast-specific playback engine using **`HTMLAudioElement`**. Does not use `expo-av`.
+- Uses a `PODCAST_AUDIO_URLS` map (only `default` key wired) for audio URLs.
+- Exposes `{ currentPodcast, isPlaying, isLoading, progress, duration,
+  playPodcast, pausePodcast, resumePodcast, stopPodcast, clearPodcast,
+  seekTo, formatTime }`.
+- `progress` is the elapsed seconds (not a 0–1 ratio).
+- `stopPodcast()` clears everything; `clearPodcast()` also clears but is a softer reset.
+- `formatTime(seconds)` → `"m:ss"` string.
+
+### FilterContext — `useFilter()`
+
+**File:** `src/context/FilterContext.tsx`
+
+- Stores a single `globalLanguage: string` (empty string = no filter).
+- Exposes `{ globalLanguage, setGlobalLanguage }`.
+- Used by the home screen's inline `LiveStationPlayer` to filter `ALL_CHANNELS` from `data/channels.ts`.
+
+### FavoritesContext — `useFavorites()`
+
+**File:** `src/context/FavoritesContext.tsx`
+
+- Persists to `localStorage` under key `@open_connect_favorites` (web).
+- `FavoriteType = 'song' | 'podcast' | 'rj' | 'station'`.
+- `FavoriteItem: { id, title, subtitle, image, type: FavoriteType, rawData }`.
+- Exposes `{ favorites, addFavorite, removeFavorite, toggleFavorite, isFavorite }`.
+
+### RJLiveContext — `useRJLive()`
+
+**File:** `src/context/RJLiveContext.tsx`
+
+- **No Socket.IO connection.** Purely local UI state for tracking which live station is active.
+- Uses `RJSStation` type from `src/data/rjsLiveStations.ts`.
+- `showMiniPlayer` is a computed property: `currentStation !== null && sessionActive && !isLiveRadioFocused`.
+- Exposes `{ currentStation, isPlaying, isLiveRadioFocused, showMiniPlayer,
+  setLiveRadioFocused, startSession, updateStation, pauseLive, resumeLive,
+  toggleLive, stopLive }`.
 
 ---
 
-## 6. Screen & Route Catalog
+## 6. Backend Communication Layer
 
-### Core Navigation Routes
+**File:** `src/services/api.ts`
 
-#### 1. Home Feed ([`app/index.tsx`](file:///c:/Kravix/open-connect/open-connect/app/index.tsx))
-* **Hero Banner & Mood Selector:** Dynamic mood-based playlist picker.
-* **Live Radio Banner:** Pulsing animated visualizer waves for current broadcast (`Radio Mirchi 98.3 FM`).
-* **Ad Carousel:** Auto-sliding banner advertisements.
-* **Song Shelves:** Horizontal scrolling rows for *Recently Played*, *Perfect For You*, and *New Releases*.
-* **Podcasts & Live RJs:** Quick access to popular podcast episodes and currently on-air RJs.
-* **Live Events:** Upcoming concerts with dates, venues, and ticket purchasing links.
+```typescript
+export const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? fallbackHost;
+// fallbackHost: 'http://10.0.2.2:3000' (Android emulator) or 'http://localhost:3000' (others)
+export const API_PREFIX = '/api/v1';
+```
 
-#### 2. Search ([`app/search.tsx`](file:///c:/Kravix/open-connect/open-connect/app/search.tsx))
-* Fast search with live filter chips (All, Songs, Podcasts, Stations, RJs).
-* Connects to `/search` API with local fallback filtering.
+- `apiGet<T>(path, init?)` — typed GET request
+- `apiPost<T, TBody>(path, body?, init?)` — typed POST request
+- Throws `ApiRequestError(status, message, details)` on non-2xx responses.
+- Passes `Authorization: Bearer <token>` when `init.accessToken` is provided.
 
-#### 3. Favourites & Library ([`app/favourites.tsx`](file:///c:/Kravix/open-connect/open-connect/app/favourites.tsx))
-* Tabbed view allowing users to switch between their saved Songs, Podcasts, Radio Stations, and RJs.
+**File:** `src/services/auth.service.ts`
 
-#### 4. Now Playing Full Player ([`app/now-player.tsx`](file:///c:/Kravix/open-connect/open-connect/app/now-player.tsx))
-* Full-screen music playback interface.
-* Rotating vinyl record album art animation that syncs with `isPlaying` state.
-* Interactive scrub bar with elapsed/remaining timestamps, repeat, shuffle, and favorite toggles.
+| Function | API call | Notes |
+|---|---|---|
+| `login(input)` | `POST /auth/login` | Auto-generates `deviceKey` if not supplied |
+| `register(input)` | `POST /auth/register` | Auto-generates `deviceKey` if not supplied |
+| `logout(refreshToken)` | `POST /auth/logout` | |
+| `refresh(input)` | `POST /auth/refresh` | Auto-generates `deviceKey` if not supplied |
+| `me(accessToken)` | `GET /users/me` | Note: `/users/me`, not `/auth/me` |
+| `getDeviceKey()` | — | localStorage (web) or FileSystem JSON file (native) |
 
----
+**File:** `src/services/auth-session.ts`
 
-### Podcasts Sub-App ([`app/podcasts/`](file:///c:/Kravix/open-connect/open-connect/app/podcasts/))
+- Web: `localStorage` key `open-connect-auth-session`
+- Native: `FileSystem.readAsStringAsync` / `writeAsStringAsync` to `documentDirectory + 'open-connect-auth-session.json'`
 
-* **Discover & Trending (`discover.tsx`, `trending.tsx`):** Featured podcast shows, editorial picks, top charts.
-* **Category & Speaker Exploration (`genres.tsx`, `category/[id].tsx`, `speaker/[id].tsx`):** Detailed taxonomy drilldowns.
-* **Full Podcast Player (`player.tsx`):**
-  * 15-second skip backward / 30-second skip forward.
-  * Playback speed multiplier adjustment (`1.0x`, `1.25x`, `1.5x`, `2.0x`).
-  * Configurable sleep timer (`15m`, `30m`, `45m`, end-of-episode).
-  * In-player report trigger.
-* **Creator Studio (`recording.tsx` & `recording-preview.tsx`):**
-  * Live microphone recording studio with visual waveform animations.
-  * Pause, resume, and review recorded audio clips before saving/sharing.
-* **Content Reporting (`report.tsx` & `report-option.tsx`):**
-  * Reason picker (Spam, Harassment, Copyright, Misleading) with submission to backend `/reports`.
+**Device key persistence**
+
+- Web: `localStorage` key `open-connect-device-key`
+- Native: `FileSystem.readAsStringAsync` / `writeAsStringAsync` to `documentDirectory + 'open-connect-device-key.txt'`
 
 ---
 
-### Live Stations & Live Video Section ([`app/livestations/`](file:///c:/Kravix/open-connect/open-connect/app/livestations/))
+## 7. Screen Catalogue
 
-* **Radio Stations (`stations.tsx`):** Categorized directory of FM and digital stations with live listener counts.
-* **All Channels (`all-channels.tsx`):** Live video and streaming music channels.
-* **Local Audio Files (`local-files.tsx`):** Scans and plays offline audio files stored on the physical device.
+### Home (`app/index.tsx`)
+
+- Fetches `GET /home` via `apiGet` on mount inside `useHomeCatalog()` hook.
+- Maps backend response fields: `trendingSongs` → `recentlyPlayed` + `perfectForYou`; `newSongs` → `newReleases`.
+- Falls back silently to local data from `src/data/songs.ts`, `src/data/events.ts` on any error.
+- Inline **`LiveStationPlayer`** component: channel switcher driven by `ALL_CHANNELS` from
+  `data/channels.ts`; filtered by `FilterContext.globalLanguage`; language filter presented via
+  bottom-sheet `Modal` with animated spring slide-up.
+- Inline **`LiveRJCard`**: pulsing avatar, LIVE badge, listener count.
+- Sections rendered: Upcoming Events, Live Station, Live RJs, Podcasts, Recently Played,
+  Perfect For You, New Releases.
+
+### Search (`app/search.tsx`)
+
+- **Does not call the backend `/search` API.**
+- Filters a hardcoded `ALL_SEARCHABLE_ITEMS` array client-side (songs, artists, playlists, albums).
+- When no query is entered, shows static sections: Mood (Energize/Relax/Focus/Romance),
+  Recently Played, Popular Artists, Curated Playlists.
+- Desktop hides back button (`isDesktop = windowWidth >= 900`).
+
+### Favourites (`app/favourites.tsx`)
+
+- Reads `FavoritesContext.favorites` (localStorage-backed, no backend calls).
+- Inline search bar filters by `title` or `subtitle`.
+- Integrates `AudioContext` (songs), `PlayerContext` (podcasts), `RJLiveContext` (RJ stations)
+  for play/pause toggling directly from the list.
+- Uses `React.memo` on `FavouriteRow` with a custom equality check.
+
+### Now Playing (`app/now-player.tsx`)
+
+- Consumes `AudioContext`: `currentTrack`, `isPlaying`, `position`, `duration`,
+  `pauseTrack`, `resumeTrack`, `playNext`, `playPrevious`, `seekTo`, `seekForward`, `seekBackward`.
+- Rotating vinyl record art animation driven by `Animated.loop` — pauses when not playing.
+- Progress bar: tappable; calculates seek position from `locationX / barWidth * duration`.
+- `seekForward` / `seekBackward`: ±10 s (shown as "10" labels next to seek icons).
+- "Daily Atmos" badge using `expo-blur` `BlurView`.
+- `useEffect` redirects to previous screen if `currentTrack` becomes null.
+- Bottom actions: favourite toggle (`FavoritesContext`), share, download, queue (icons only — no logic wired beyond favourite).
+
+### Request RJ (`app/request-rj.tsx`)
+
+- Pure wrapper: renders `<RequestRJScreen onBack={...} />` from `src/screens/RequestRJScreen.tsx`.
+- `onBack` calls `router.back()` or falls back to `router.replace('/')`.
+
+### Podcasts sub-app (`app/podcasts/`)
+
+| File | Description |
+|---|---|
+| `discover.tsx` | Main podcast discovery feed |
+| `trending.tsx` | Trending podcasts list |
+| `all-new-podcasts.tsx` | Newly released episodes |
+| `genres.tsx` | Browse by podcast category |
+| `filtered-results.tsx` | Filtered episode results |
+| `speakers.tsx` | Host / speaker directory |
+| `category/[id].tsx` | Dynamic category episode list |
+| `speaker/[id].tsx` | Dynamic speaker profile & episodes |
+| `live-all.tsx` | All active live podcast streams |
+| `live-player.tsx` | Interactive live podcast room |
+| `player.tsx` | Full-screen podcast player (speed, sleep timer) |
+| `recording.tsx` | Microphone recording studio with waveform |
+| `recording-preview.tsx` | Audio preview & publishing screen |
+| `report.tsx` | Reporting reason picker |
+| `report-option.tsx` | Reporting details form |
+
+### Live Stations sub-app (`app/livestations/`)
+
+| File | Description |
+|---|---|
+| `stations.tsx` | Categorised directory of FM & digital stations |
+| `all-channels.tsx` | Live video and streaming music channels |
+| `local-files.tsx` | On-device audio file browser & player |
+
+### RJs sub-app (`app/rjs/`)
+
+| File | Description |
+|---|---|
+| `stations.tsx` | RJ profile list with station affiliations and on-air badges |
+| `artist.tsx` | Artist details & top tracks |
+| `topsingers.tsx` | Featured singers list |
+| `album-details.tsx` | Album tracklist & metadata |
+| `genre.tsx` | Genre-specific song collection |
+| `live-radio.tsx` | Live radio broadcast interface |
+| `live-player.tsx` | Live RJ player with realtime chat & emoji reactions |
+| `live-event.tsx` | Live event viewer |
+| `player.tsx` | Secondary audio player |
+| `search.tsx` | RJ & station search |
 
 ---
 
-### Radio Jockeys & Live Broadcasts ([`app/rjs/`](file:///c:/Kravix/open-connect/open-connect/app/rjs/))
+## 8. Layout System
 
-* **RJ Directory (`stations.tsx`):** Profile list showing station affiliations and online/on-air badges.
-* **Live Broadcast Room (`live-player.tsx`):**
-  * Live streaming audio connection.
-  * Realtime listener chat feed with message submission.
-  * Animated floating emoji reactions (`like`, `love`, `fire`, `clap`).
-  * Realtime audience presence indicator.
-* **RJ Song Request / Shoutout (`app/request-rj.tsx` & `RequestRJScreen.tsx`):** Form allowing listeners to send song dedication requests and messages directly to RJs.
+### Desktop Layout (`DesktopLayout` in `_layout.tsx`)
 
----
-
-## 7. Backend Integration & Authentication Lifecycle
+Activated when `useWindowDimensions().width >= 900`.
 
 ```
-       React Native App                          Backend Server
-     (open-connect/open-connect)             (open-connect-backend)
-             │                                         │
-             ├────── Ensure unique deviceKey ─────────┤ (Persisted in file / storage)
-             │                                         │
-             ├────── POST /api/v1/auth/login ─────────►│
-             │       { email, password, deviceKey }    │
-             │                                         │
-             │◄───── 200 OK + Tokens ──────────────────┤
-             │       { accessToken, refreshToken }     │
-             │                                         │
-             ├────── Save tokens in auth-session.ts ───┤ (Local / AsyncStorage)
-             │                                         │
-             ├────── GET /api/v1/home ────────────────►│
-             │       Authorization: Bearer <token>     │
-             │                                         │
-             │◄───── 200 OK (Home Payload) ────────────┤
-             │                                         │
-      (Token Expires)                                  │
-             ├────── POST /api/v1/auth/refresh ───────►│
-             │       { refreshToken, deviceKey }       │
-             │                                         │
-             │◄───── 200 OK (New Token Pair) ──────────┤
+┌──────────────────────────────────────────────────────────┐
+│  DesktopSidebar (240 px)  │  DesktopTopNav               │
+│                           ├──────────────────────────────│
+│  - Home                   │  AppStack (scrollable)       │
+│  - Favourites             │                              │
+│  - Podcasts               │               DesktopRight   │
+│  - RJ Live                │               Sidebar        │
+│  - Live Stations          │               (trending +    │
+│  - Auth state             │                top RJs)      │
+│  - Premium upsell         │                              │
+├───────────────────────────┴──────────────────────────────┤
+│  DesktopPlayerBar  (full width, always visible)          │
+└──────────────────────────────────────────────────────────┘
 ```
 
-* **Network Configuration:** Handled in [`src/services/api.ts`](file:///c:/Kravix/open-connect/open-connect/src/services/api.ts):
-  * Web & iOS Simulator: `http://localhost:3000/api/v1`
-  * Android Emulator: `http://10.0.2.2:3000/api/v1`
-  * Production: Configured via `EXPO_PUBLIC_API_URL`
-* **Device Identification:** Unique hardware device key generated via `FileSystem` or `localStorage` to participate in rotating refresh-token families.
-* **Token Storage:** Encapsulated in [`src/services/auth-session.ts`](file:///c:/Kravix/open-connect/open-connect/src/services/auth-session.ts).
+Root background: `#0A0A0A` (dark, fixed — not from theme).
+
+### Mobile Layout (`MobileLayout` in `_layout.tsx`)
+
+Activated when width < 900.
+
+```
+┌──────────────────────────┐
+│  AppStack                │
+├──────────────────────────┤
+│  PodcastMiniPlayer       │  (floating, slide-up, visible when podcast active)
+│  RJLiveMiniPlayer        │  (floating, visible when RJLiveContext.showMiniPlayer)
+├──────────────────────────┤
+│  MobileTabBar (5 tabs)   │
+└──────────────────────────┘
+```
+
+### Global Modals (rendered in `RootLayoutContent`, outside both layouts)
+
+- `AuthModal` — login / register
+- `ProfileModal` — logged-in user profile
+- `NotificationsModal` — notification inbox
+- `PremiumFeatures` — subscription upsell
 
 ---
 
-## 8. How to Run the Frontend Locally
+## 9. Auth Lifecycle
+
+```
+App boot (AuthContext useEffect)
+       │
+       ▼
+Load tokens from storage
+  (localStorage on web / FileSystem JSON on native)
+       │
+       ├── No tokens → loading = false, unauthenticated
+       │
+       ├── Access token present & not expired?
+       │     └── Call GET /users/me
+       │           ├── Success → hydrate user state, done
+       │           └── Fail   → fall through to refresh
+       │
+       └── Refresh token present & not expired?
+             └── Call POST /auth/refresh (with deviceKey)
+                   ├── Success → save new tokens, hydrate user state
+                   └── Fail   → clearAuthSessionStorage(), unauthenticated
+```
+
+Token expiry is determined client-side by decoding the JWT payload (`atob`) — no network call just
+to check validity.
+
+---
+
+## 10. Local Mock Data
+
+All screens fall back to the arrays in `src/data/` if the backend is unreachable. These are also
+used directly by some components that have not yet been wired to the API.
+
+| File | Contents |
+|---|---|
+| `songs.ts` | `recentlyPlayed`, `perfectForYou`, `newReleases` arrays |
+| `podcasts.ts` | Featured podcast shows and categories |
+| `events.ts` | Concerts and live events |
+| `liveStations.ts` | FM & internet radio stations |
+| `rjs.ts` | RJ profiles |
+| `rjsLiveStations.ts` | `RJSStation` type + active live broadcast list (used by `RJLiveContext`) |
+| `channels.ts` | `ALL_CHANNELS` array + `LANGUAGES` list (used by home `LiveStationPlayer` and `FilterContext`) |
+| `ads.ts` | Banner advertisement items |
+
+---
+
+## 11. Local Development
 
 ```bash
-# 1. Navigate to the frontend directory
-cd "c:/Kravix/open-connect/open-connect"
-
-# 2. Install dependencies (if not already installed)
+cd "open-connect/open-connect"
 npm install
-
-# 3. Start the Expo development server
 npx expo start
 ```
 
-### Launch Options:
-* **Web / Desktop Browser:** Press `w` in terminal (opens at `http://localhost:8081` with desktop 3-column Spotify layout).
-* **Android Emulator:** Press `a` in terminal (requires Android Studio).
-* **iOS Simulator:** Press `i` in terminal (macOS only).
-* **Physical Device:** Install **Expo Go** from App Store / Google Play and scan the terminal QR code.
+| Key | Action |
+|---|---|
+| `w` | Open in browser at `http://localhost:8081` (desktop 3-column layout) |
+| `a` | Android emulator (API URL auto-switches to `http://10.0.2.2:3000`) |
+| `i` | iOS simulator (macOS only) |
+| QR code | Scan with Expo Go on physical device |
+
+### Production web build (static export)
+
+```bash
+npx expo export --platform web
+# Output: dist/   (configured in app.json: "web": { "output": "static" })
+```
+
+### Environment variable
+
+| Variable | Purpose |
+|---|---|
+| `EXPO_PUBLIC_API_URL` | Backend base URL (e.g. `https://your-backend.onrender.com`). If not set, defaults to `http://localhost:3000` (iOS/web) or `http://10.0.2.2:3000` (Android emulator). |
