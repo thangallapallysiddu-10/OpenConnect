@@ -14,6 +14,7 @@ import {
 import { usePlayer } from '../../context/PlayerContext';
 import { useAudio } from '../../context/AudioContext';
 import { useRJLive } from '../../context/RJLiveContext';
+import { Tooltip } from '../Tooltip/Tooltip';
 
 export default function DesktopPlayerBar() {
   const pathname = usePathname();
@@ -219,39 +220,49 @@ export default function DesktopPlayerBar() {
         <View style={S.center}>
           <Text style={S.timeText}>{formatTime(progress)}</Text>
 
-          <TouchableOpacity style={S.iconBtn} activeOpacity={0.7}>
-            <Ionicons name="play-back" size={20} color="rgba(255,255,255,0.6)" />
-          </TouchableOpacity>
+          <Tooltip label="Previous">
+            <TouchableOpacity style={S.iconBtn} activeOpacity={0.7}>
+              <Ionicons name="play-back" size={20} color="rgba(255,255,255,0.6)" />
+            </TouchableOpacity>
+          </Tooltip>
 
-          <TouchableOpacity
-            style={S.playBtn}
-            onPress={togglePlayPause}
-            activeOpacity={0.85}
-          >
-            <LinearGradient
-              colors={['#EC4899', '#8B5CF6']}
-              style={S.playGradient}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
+          <Tooltip label={isPlaying ? 'Pause' : 'Play'}>
+            <TouchableOpacity
+              style={S.playBtn}
+              onPress={togglePlayPause}
+              activeOpacity={0.85}
             >
-              <Ionicons name={isPlaying ? 'pause' : 'play'} size={22} color="#FFFFFF" />
-            </LinearGradient>
-          </TouchableOpacity>
+              <LinearGradient
+                colors={['#EC4899', '#8B5CF6']}
+                style={S.playGradient}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+              >
+                <Ionicons name={isPlaying ? 'pause' : 'play'} size={22} color="#FFFFFF" />
+              </LinearGradient>
+            </TouchableOpacity>
+          </Tooltip>
 
-          <TouchableOpacity style={S.iconBtn} activeOpacity={0.7}>
-            <Ionicons name="play-forward" size={20} color="rgba(255,255,255,0.6)" />
-          </TouchableOpacity>
+          <Tooltip label="Next">
+            <TouchableOpacity style={S.iconBtn} activeOpacity={0.7}>
+              <Ionicons name="play-forward" size={20} color="rgba(255,255,255,0.6)" />
+            </TouchableOpacity>
+          </Tooltip>
 
           <Text style={S.timeText}>{formatTime(duration)}</Text>
         </View>
 
         <View style={S.right}>
-          <TouchableOpacity style={S.iconBtn} onPress={goToPlayer} activeOpacity={0.7}>
-            <Ionicons name="expand-outline" size={18} color="rgba(255,255,255,0.6)" />
-          </TouchableOpacity>
-          <TouchableOpacity style={S.iconBtn} onPress={stopPlayback} activeOpacity={0.7}>
-            <Ionicons name="close-circle-outline" size={20} color="rgba(255,255,255,0.5)" />
-          </TouchableOpacity>
+          <Tooltip label="Expand">
+            <TouchableOpacity style={S.iconBtn} onPress={goToPlayer} activeOpacity={0.7}>
+              <Ionicons name="expand-outline" size={18} color="rgba(255,255,255,0.6)" />
+            </TouchableOpacity>
+          </Tooltip>
+          <Tooltip label="Stop">
+            <TouchableOpacity style={S.iconBtn} onPress={stopPlayback} activeOpacity={0.7}>
+              <Ionicons name="close-circle-outline" size={20} color="rgba(255,255,255,0.5)" />
+            </TouchableOpacity>
+          </Tooltip>
         </View>
       </BlurView>
     </Animated.View>

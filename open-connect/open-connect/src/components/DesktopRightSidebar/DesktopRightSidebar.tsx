@@ -8,28 +8,28 @@ import { useRouter } from 'expo-router';
 
 const trendingTracks = [
   {
-    id: '1',
+    id: 'trending-1',
     title: 'Neon Skyline',
     artist: 'Cyber Drift',
     image: 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=100&q=80',
     uri: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3',
   },
   {
-    id: '2',
+    id: 'trending-2',
     title: 'Midnight Rain',
     artist: 'Luna Echoes',
     image: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=100&q=80',
     uri: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3',
   },
   {
-    id: '3',
+    id: 'trending-3',
     title: 'Lost in Tokyo',
     artist: 'The Wanderers',
     image: 'https://images.unsplash.com/photo-1493225457124-a1a2a5f5294b?w=100&q=80',
     uri: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3',
   },
   {
-    id: '4',
+    id: 'trending-4',
     title: 'Electric Pulse',
     artist: 'Nova Drive',
     image: 'https://images.unsplash.com/photo-1478737270239-2f02b77fc618?w=100&q=80',

@@ -17,6 +17,7 @@ import {
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
 import { useNotifications } from '../../context/NotificationContext';
+import { Tooltip } from '../Tooltip/Tooltip';
 
 export default function DesktopTopNav() {
   const { colors, isDark, theme, toggleTheme } = useTheme();
@@ -145,21 +146,25 @@ export default function DesktopTopNav() {
       <View style={[S.navbar, { backgroundColor: navBg, borderBottomColor: borderColor }]}>
         {/* Left — back/forward navigation */}
         <View style={S.navLeft}>
-          <TouchableOpacity
-            style={[S.navBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)', opacity: canGoBack ? 1 : 0.4 }]}
-            onPress={() => router.canGoBack() && router.back()}
-            activeOpacity={0.7}
-            disabled={!canGoBack}
-          >
-            <Ionicons name="chevron-back" size={18} color={colors.text} />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[S.navBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)', opacity: 0.4 }]}
-            activeOpacity={0.7}
-            disabled
-          >
-            <Ionicons name="chevron-forward" size={18} color={colors.text} />
-          </TouchableOpacity>
+          <Tooltip label="Back">
+            <TouchableOpacity
+              style={[S.navBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)', opacity: canGoBack ? 1 : 0.4 }]}
+              onPress={() => router.canGoBack() && router.back()}
+              activeOpacity={0.7}
+              disabled={!canGoBack}
+            >
+              <Ionicons name="chevron-back" size={18} color={colors.text} />
+            </TouchableOpacity>
+          </Tooltip>
+          <Tooltip label="Forward">
+            <TouchableOpacity
+              style={[S.navBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)', opacity: 0.4 }]}
+              activeOpacity={0.7}
+              disabled
+            >
+              <Ionicons name="chevron-forward" size={18} color={colors.text} />
+            </TouchableOpacity>
+          </Tooltip>
         </View>
 
         {/* Center — global search */}
@@ -177,48 +182,54 @@ export default function DesktopTopNav() {
 
         {/* Right — profile & settings */}
         <View style={S.navRight}>
-          <TouchableOpacity
-            style={[S.navBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)' }]}
-            activeOpacity={0.7}
-            onPress={openNotifications}
-          >
-            <Ionicons name="notifications-outline" size={18} color={colors.textMuted} />
-          </TouchableOpacity>
+          <Tooltip label="Notifications">
+            <TouchableOpacity
+              style={[S.navBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)' }]}
+              activeOpacity={0.7}
+              onPress={openNotifications}
+            >
+              <Ionicons name="notifications-outline" size={18} color={colors.textMuted} />
+            </TouchableOpacity>
+          </Tooltip>
 
-          <TouchableOpacity
-            style={[
-              S.avatarBtn,
-              isLoggedIn
-                ? { backgroundColor: '#1a3a2a', borderColor: '#22c55e' }
-                : { backgroundColor: '#311042', borderColor: '#8B5CF6' },
-            ]}
-            activeOpacity={0.8}
-            onPress={() => {
-              if (!isLoggedIn) {
-                showAuthModal();
-              } else {
-                openProfile();
-              }
-            }}
-          >
-            <Text style={S.avatarText}>
-              {isLoggedIn && user?.name
-                ? user.name.trim().charAt(0).toUpperCase()
-                : 'U'}
-            </Text>
-            {isLoggedIn && (
-              <View style={S.onlineDot} />
-            )}
-          </TouchableOpacity>
+          <Tooltip label={isLoggedIn ? 'Profile' : 'Sign In'}>
+            <TouchableOpacity
+              style={[
+                S.avatarBtn,
+                isLoggedIn
+                  ? { backgroundColor: '#1a3a2a', borderColor: '#22c55e' }
+                  : { backgroundColor: '#311042', borderColor: '#8B5CF6' },
+              ]}
+              activeOpacity={0.8}
+              onPress={() => {
+                if (!isLoggedIn) {
+                  showAuthModal();
+                } else {
+                  openProfile();
+                }
+              }}
+            >
+              <Text style={S.avatarText}>
+                {isLoggedIn && user?.name
+                  ? user.name.trim().charAt(0).toUpperCase()
+                  : 'U'}
+              </Text>
+              {isLoggedIn && (
+                <View style={S.onlineDot} />
+              )}
+            </TouchableOpacity>
+          </Tooltip>
 
           {/* 3-dots Button */}
-          <TouchableOpacity
-            style={[S.navBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)' }]}
-            activeOpacity={0.7}
-            onPress={openQuickActions}
-          >
-            <Ionicons name="ellipsis-vertical" size={17} color={colors.text} />
-          </TouchableOpacity>
+          <Tooltip label="More">
+            <TouchableOpacity
+              style={[S.navBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)' }]}
+              activeOpacity={0.7}
+              onPress={openQuickActions}
+            >
+              <Ionicons name="ellipsis-vertical" size={17} color={colors.text} />
+            </TouchableOpacity>
+          </Tooltip>
         </View>
       </View>
 
