@@ -269,12 +269,39 @@ export default function NowPlayingScreen() {
         {/* ── Playback Controls ────────────────────────────────────────────── */}
         <View style={{
           flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-          gap: 16, paddingHorizontal: 20, marginTop: 8, marginBottom: 24,
+          gap: 12, paddingHorizontal: 16, marginTop: 8, marginBottom: 28,
         }}>
+
+          {/* ── SHUFFLE — left outermost ── */}
+          <Tooltip label={shuffle ? 'Shuffle: On — tap to disable' : 'Shuffle: Off — tap to enable'}>
+            <TouchableOpacity
+              onPress={handleShuffle}
+              activeOpacity={0.75}
+              style={{
+                width: 38, height: 38, borderRadius: 19,
+                alignItems: 'center', justifyContent: 'center',
+                backgroundColor: shuffle ? 'rgba(139,92,246,0.22)' : 'transparent',
+                borderWidth: shuffle ? 1.5 : 0,
+                borderColor: shuffle ? '#8B5CF6' : 'transparent',
+              }}
+            >
+              <Ionicons name="shuffle" size={20} color={shuffle ? '#8B5CF6' : '#4B5563'} />
+              {/* active indicator dot */}
+              {shuffle && (
+                <View style={{
+                  position: 'absolute', bottom: 4, left: '50%',
+                  marginLeft: -3,
+                  width: 5, height: 5, borderRadius: 3,
+                  backgroundColor: '#8B5CF6',
+                }} />
+              )}
+            </TouchableOpacity>
+          </Tooltip>
+
           {/* Skip Previous */}
           <Tooltip label="Previous track">
-            <TouchableOpacity onPress={playPrevious} style={{ padding: 10 }} activeOpacity={0.7}>
-              <Ionicons name="play-skip-back" size={30} color="#fff" />
+            <TouchableOpacity onPress={playPrevious} style={{ padding: 8 }} activeOpacity={0.7}>
+              <Ionicons name="play-skip-back" size={28} color="#fff" />
             </TouchableOpacity>
           </Tooltip>
 
@@ -286,11 +313,11 @@ export default function NowPlayingScreen() {
               style={{
                 flexDirection: 'row', alignItems: 'center',
                 backgroundColor: 'rgba(255,255,255,0.08)',
-                paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, gap: 3,
+                paddingHorizontal: 10, paddingVertical: 7, borderRadius: 20, gap: 3,
               }}
             >
-              <Ionicons name="play-back" size={18} color="#9CA3AF" />
-              <Text style={{ color: '#9CA3AF', fontSize: 11, fontWeight: '700' }}>10</Text>
+              <Ionicons name="play-back" size={16} color="#9CA3AF" />
+              <Text style={{ color: '#9CA3AF', fontSize: 10, fontWeight: '700' }}>10</Text>
             </TouchableOpacity>
           </Tooltip>
 
@@ -324,49 +351,73 @@ export default function NowPlayingScreen() {
               style={{
                 flexDirection: 'row', alignItems: 'center',
                 backgroundColor: 'rgba(255,255,255,0.08)',
-                paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, gap: 3,
+                paddingHorizontal: 10, paddingVertical: 7, borderRadius: 20, gap: 3,
               }}
             >
-              <Ionicons name="play-forward" size={18} color="#9CA3AF" />
-              <Text style={{ color: '#9CA3AF', fontSize: 11, fontWeight: '700' }}>10</Text>
+              <Ionicons name="play-forward" size={16} color="#9CA3AF" />
+              <Text style={{ color: '#9CA3AF', fontSize: 10, fontWeight: '700' }}>10</Text>
             </TouchableOpacity>
           </Tooltip>
 
           {/* Skip Next */}
           <Tooltip label="Next track">
-            <TouchableOpacity onPress={playNext} style={{ padding: 10 }} activeOpacity={0.7}>
-              <Ionicons name="play-skip-forward" size={30} color="#fff" />
-            </TouchableOpacity>
-          </Tooltip>
-        </View>
-
-        {/* ── Secondary Controls Row (Shuffle / Repeat) ─────────────────────── */}
-        <View style={{
-          flexDirection: 'row', justifyContent: 'center', alignItems: 'center',
-          gap: 24, marginBottom: 28,
-        }}>
-          <Tooltip label={shuffle ? 'Shuffle: On — tap to turn off' : 'Shuffle: Off — tap to turn on'}>
-            <TouchableOpacity onPress={handleShuffle} activeOpacity={0.7} style={{ padding: 8 }}>
-              <Ionicons
-                name="shuffle"
-                size={22}
-                color={shuffle ? '#8B5CF6' : '#4B5563'}
-              />
+            <TouchableOpacity onPress={playNext} style={{ padding: 8 }} activeOpacity={0.7}>
+              <Ionicons name="play-skip-forward" size={28} color="#fff" />
             </TouchableOpacity>
           </Tooltip>
 
+          {/* ── REPEAT — right outermost ── */}
           <Tooltip label={repeatLabel}>
-            <TouchableOpacity onPress={handleRepeat} activeOpacity={0.7} style={{ padding: 8 }}>
-              <Ionicons name={repeatIcon} size={22} color={repeatColor} />
+            <TouchableOpacity
+              onPress={handleRepeat}
+              activeOpacity={0.75}
+              style={{
+                width: 38, height: 38, borderRadius: 19,
+                alignItems: 'center', justifyContent: 'center',
+                backgroundColor:
+                  repeat === 'off'
+                    ? 'transparent'
+                    : repeat === 'all'
+                    ? 'rgba(139,92,246,0.22)'
+                    : 'rgba(236,72,153,0.22)',
+                borderWidth: repeat !== 'off' ? 1.5 : 0,
+                borderColor:
+                  repeat === 'all' ? '#8B5CF6' : repeat === 'one' ? '#EC4899' : 'transparent',
+              }}
+            >
+              <Ionicons
+                name={repeat === 'one' ? 'repeat' : 'repeat-outline'}
+                size={20}
+                color={
+                  repeat === 'off'  ? '#4B5563' :
+                  repeat === 'all'  ? '#8B5CF6' : '#EC4899'
+                }
+              />
+              {/* active indicator dot */}
+              {repeat !== 'off' && (
+                <View style={{
+                  position: 'absolute', bottom: 4, left: '50%',
+                  marginLeft: -3,
+                  width: 5, height: 5, borderRadius: 3,
+                  backgroundColor: repeat === 'all' ? '#8B5CF6' : '#EC4899',
+                }} />
+              )}
+              {/* "1" badge for repeat-one */}
               {repeat === 'one' && (
                 <View style={{
-                  position: 'absolute', top: 4, right: 4,
-                  width: 8, height: 8, borderRadius: 4, backgroundColor: '#EC4899',
-                }} />
+                  position: 'absolute', top: 2, right: 2,
+                  backgroundColor: '#EC4899',
+                  borderRadius: 5, paddingHorizontal: 3, paddingVertical: 1,
+                }}>
+                  <Text style={{ color: '#fff', fontSize: 7, fontWeight: '900' }}>1</Text>
+                </View>
               )}
             </TouchableOpacity>
           </Tooltip>
+
         </View>
+
+        {/* ── OLD SECONDARY ROW REMOVED — shuffle & repeat are now inline above ── */}
 
         {/* ── Bottom Action Buttons ────────────────────────────────────────── */}
         <View style={{
