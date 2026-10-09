@@ -293,24 +293,48 @@ export default function NowPlayingScreen() {
               window.addEventListener('mouseup', onUp);
             }}
           >
-            {/* Visual rail */}
-            <View style={{
-              height: 4,
-              backgroundColor: 'rgba(255,255,255,0.15)',
-              borderRadius: 2,
-            }}>
-              {/* Purple animated fill */}
-              <Animated.View style={{
-                position: 'absolute',
-                left: 0, top: 0, bottom: 0,
+            {/* Rail + fill + knob — all in one relative container */}
+            <View style={{ position: 'relative', justifyContent: 'center' }}>
+              {/* Grey background rail */}
+              <View style={{
+                height: 4,
+                backgroundColor: 'rgba(255,255,255,0.15)',
                 borderRadius: 2,
-                width: fillPx,
-                backgroundColor: GRAD_START,
-              }} />
+              }}>
+                {/* Purple animated fill */}
+                <Animated.View style={{
+                  position: 'absolute',
+                  left: 0, top: 0, bottom: 0,
+                  borderRadius: 2,
+                  width: fillPx,
+                  backgroundColor: GRAD_START,
+                }} />
+              </View>
+
+              {/* Knob — sits at the right edge of the fill, vertically centred on the rail */}
+              <Animated.View
+                style={{
+                  position: 'absolute',
+                  // centre knob on the 4px rail: top = (railHeight/2) - (knobSize/2) = 2 - 6 = -4
+                  // But we're in a relative container with justifyContent:center so top:0 = centre
+                  top: -4,          // knob is 12px, rail is 4px → offset by (12-4)/2 = 4
+                  width: 12,
+                  height: 12,
+                  borderRadius: 6,
+                  backgroundColor: GRAD_START,
+                  // Shift left by half the knob width so its centre aligns with fill edge
+                  transform: [{ translateX: Animated.subtract(fillPx, new Animated.Value(6)) }],
+                  shadowColor: GRAD_START,
+                  shadowOffset: { width: 0, height: 0 },
+                  shadowOpacity: 0.9,
+                  shadowRadius: 5,
+                  elevation: 5,
+                }}
+              />
             </View>
           </View>
 
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 10 }}>
             <Text style={{ color: '#6B7280', fontSize: 11 }}>{formatTime(position)}</Text>
             <Text style={{ color: '#6B7280', fontSize: 11 }}>{formatTime(duration)}</Text>
           </View>
