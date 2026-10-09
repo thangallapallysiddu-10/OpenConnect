@@ -23,15 +23,12 @@ interface RowProps {
   isPlaying: boolean;
   isLoaded: boolean;
   onPlayPause: (item: FavoriteItem) => void;
+  onRemove: (id: string) => void;
   colors: any;
 }
 
 const FavouriteRow = React.memo(
-  ({ item, isPlaying, isLoaded, onPlayPause, colors }: RowProps) => {
-    const handlePress = () => {
-      onPlayPause(item);
-    };
-
+  ({ item, isPlaying, isLoaded, onPlayPause, onRemove, colors }: RowProps) => {
     const iconName: any = isPlaying ? 'pause-circle' : 'play-circle';
     const iconColor = isLoaded
       ? colors.iconColor || '#8B5CF6'
@@ -60,9 +57,19 @@ const FavouriteRow = React.memo(
             {item.subtitle}
           </Text>
         </View>
+        {/* ── Remove from favourites ── */}
         <TouchableOpacity
           style={styles.itemMenu}
-          onPress={handlePress}
+          onPress={() => onRemove(item.id)}
+          activeOpacity={0.7}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+        >
+          <Ionicons name="heart" size={22} color="#ef4444" />
+        </TouchableOpacity>
+        {/* ── Play / Pause ── */}
+        <TouchableOpacity
+          style={styles.itemMenu}
+          onPress={() => onPlayPause(item)}
           activeOpacity={0.7}
           hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
         >
@@ -80,7 +87,7 @@ const FavouriteRow = React.memo(
 
 export default function FavouritesScreen() {
   const { theme, colors } = useTheme();
-  const { favorites } = useFavorites();
+  const { favorites, removeFavorite } = useFavorites();
   const [searchQuery, setSearchQuery] = useState('');
 
   const {
@@ -189,6 +196,7 @@ export default function FavouritesScreen() {
           isPlaying={isPlaying}
           isLoaded={isLoaded}
           onPlayPause={handlePlayPause}
+          onRemove={removeFavorite}
           colors={colors}
         />
       );
@@ -197,7 +205,7 @@ export default function FavouritesScreen() {
       currentTrack, audioIsPlaying,
       currentPodcast, podcastIsPlaying,
       currentStation, rjIsPlaying,
-      handlePlayPause, colors,
+      handlePlayPause, removeFavorite, colors,
     ]
   );
 

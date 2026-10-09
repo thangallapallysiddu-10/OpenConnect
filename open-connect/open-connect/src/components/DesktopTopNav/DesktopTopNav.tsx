@@ -20,7 +20,7 @@ import { useNotifications } from '../../context/NotificationContext';
 
 export default function DesktopTopNav() {
   const { colors, isDark, theme, toggleTheme } = useTheme();
-  const { isLoggedIn, showAuthModal, openProfile } = useAuth();
+  const { isLoggedIn, user, showAuthModal, openProfile } = useAuth();
   const { openNotifications } = useNotifications();
   const pathname = usePathname();
   const { width: windowWidth } = useWindowDimensions();
@@ -186,7 +186,12 @@ export default function DesktopTopNav() {
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[S.avatarBtn, { backgroundColor: '#311042', borderColor: '#8B5CF6' }]}
+            style={[
+              S.avatarBtn,
+              isLoggedIn
+                ? { backgroundColor: '#1a3a2a', borderColor: '#22c55e' }
+                : { backgroundColor: '#311042', borderColor: '#8B5CF6' },
+            ]}
             activeOpacity={0.8}
             onPress={() => {
               if (!isLoggedIn) {
@@ -196,7 +201,14 @@ export default function DesktopTopNav() {
               }
             }}
           >
-            <Text style={S.avatarText}>U</Text>
+            <Text style={S.avatarText}>
+              {isLoggedIn && user?.name
+                ? user.name.trim().charAt(0).toUpperCase()
+                : 'U'}
+            </Text>
+            {isLoggedIn && (
+              <View style={S.onlineDot} />
+            )}
           </TouchableOpacity>
 
           {/* 3-dots Button */}
@@ -498,6 +510,17 @@ const S = StyleSheet.create({
   },
   avatarText: {
     color: '#FFFFFF', fontSize: 12, fontWeight: '900', letterSpacing: 1,
+  },
+  onlineDot: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 9,
+    height: 9,
+    borderRadius: 5,
+    backgroundColor: '#22c55e',
+    borderWidth: 1.5,
+    borderColor: '#0f0f14',
   },
 
   // Modals
