@@ -48,42 +48,56 @@ export default function DesktopPlayerBar() {
     stopLive,
   } = useRJLive();
 
-  // ── DETERMINE WHAT'S LOADED ──
-  const hasSong = !!currentTrack;
+  // ── DETERMINE WHAT'S ACTIVE ──
+  // Priority: whichever context is actively playing wins.
+  // If nothing is playing, fall back to whichever has a loaded item
+  // (so the bar shows what's paused). RJ beats song beats podcast
+  // when multiple are technically "loaded" simultaneously.
+  const hasSong    = !!currentTrack;
   const hasPodcast = !!currentPodcast;
-  const hasRJ = !!currentStation;
+  const hasRJ      = !!currentStation;
+
+  // Resolve active source by play state first, then load state
+  const activeSource: 'song' | 'podcast' | 'rj' | null = (() => {
+    if (rjIsPlaying)      return 'rj';
+    if (audioIsPlaying)   return 'song';
+    if (podcastIsPlaying) return 'podcast';
+    // Nothing playing — show whichever is loaded (last-started wins)
+    if (hasRJ)      return 'rj';
+    if (hasSong)    return 'song';
+    if (hasPodcast) return 'podcast';
+    return null;
+  })();
 
   const isPlaying = audioIsPlaying || podcastIsPlaying || rjIsPlaying;
 
-  let currentItem = null;
   let progress = 0;
   let duration = 0;
-  let title = '';
+  let title    = '';
   let subtitle = '';
-  let image = null;
+  let image: any = null;
 
-  if (hasSong) {
-    currentItem = currentTrack;
+  if (activeSource === 'song' && currentTrack) {
     progress = audioPosition;
     duration = audioDuration;
-    title = currentTrack.title;
+    title    = currentTrack.title;
     subtitle = currentTrack.artist;
-    image = currentTrack.image;
-  } else if (hasPodcast) {
-    currentItem = currentPodcast;
+    image    = currentTrack.image;
+  } else if (activeSource === 'podcast' && currentPodcast) {
     progress = podcastProgress;
     duration = podcastDuration;
-    title = currentPodcast.title;
+    title    = currentPodcast.title;
     subtitle = currentPodcast.creator;
-    image = currentPodcast.image;
-  } else if (hasRJ) {
-    currentItem = currentStation;
+    image    = currentPodcast.image;
+  } else if (activeSource === 'rj' && currentStation) {
     progress = 0;
     duration = 0;
-    title = currentStation.rjName || 'RJ Live';
-    subtitle = currentStation.currentShow || 'Live';
-    image = currentStation.thumbnail;
+    title    = currentStation.name || currentStation.rjName || 'RJ Live';
+    subtitle = `${currentStation.frequency} · ${currentStation.currentShow}`;
+    image    = currentStation.thumbnail;
   }
+
+  const currentItem = activeSource !== null;
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -92,33 +106,21 @@ export default function DesktopPlayerBar() {
   };
 
   const togglePlayPause = () => {
-    if (hasSong) {
-      audioIsPlaying ? pauseTrack() : resumeTrack();
-    } else if (hasPodcast) {
-      podcastIsPlaying ? pausePodcast() : resumePodcast();
-    } else if (hasRJ) {
-      rjIsPlaying ? pauseLive() : resumeLive();
-    }
+    if (activeSource === 'song')    { audioIsPlaying   ? pauseTrack()   : resumeTrack();  }
+    else if (activeSource === 'podcast') { podcastIsPlaying ? pausePodcast() : resumePodcast(); }
+    else if (activeSource === 'rj') { rjIsPlaying      ? pauseLive()    : resumeLive();   }
   };
 
   const stopPlayback = () => {
-    if (hasSong) {
-      clearTrack();
-    } else if (hasPodcast) {
-      stopPodcast();
-    } else if (hasRJ) {
-      stopLive();
-    }
+    if (activeSource === 'song')    clearTrack();
+    else if (activeSource === 'podcast') stopPodcast();
+    else if (activeSource === 'rj') stopLive();
   };
 
   const goToPlayer = () => {
-    if (hasSong) {
-      router.push('/now-player');
-    } else if (hasPodcast) {
-      router.push('/podcasts/player');
-    } else if (hasRJ) {
-      router.push('/rjs/live-radio');
-    }
+    if (activeSource === 'song')         router.push('/now-player');
+    else if (activeSource === 'podcast') router.push('/podcasts/player');
+    else if (activeSource === 'rj')      router.push('/rjs/live-radio');
   };
 
   const progressWidth = useRef(new Animated.Value(0)).current;
@@ -135,16 +137,7 @@ export default function DesktopPlayerBar() {
   }, []);
 
   useEffect(() => {
-    if (!currentItem) {
-      Animated.loop(
-        Animated.sequence([
-          Animated.timing(pulseAnim, { toValue: 1.05, duration: 1500, useNativeDriver: true }),
-          Animated.timing(pulseAnim, { toValue: 1, duration: 1500, useNativeDriver: true })
-        ])
-      ).start();
-    } else {
-      pulseAnim.setValue(1);
-    }
+    pulseAnim.setValue(1);
   }, [currentItem]);
 
   useEffect(() => {
@@ -159,25 +152,8 @@ export default function DesktopPlayerBar() {
   const hidePaths = ['/podcasts/player', '/podcasts/live-player', '/now-player', '/rjs/live-radio'];
   if (hidePaths.includes(pathname)) return null;
 
-  if (!currentItem) {
-    return (
-      <Animated.View style={[S.barContainer, { transform: [{ translateY: slideAnim }] }]}>
-        <Animated.View style={{ width: '100%', transform: [{ scale: pulseAnim }] }}>
-          <BlurView intensity={80} tint="dark" style={S.bar}>
-            <View style={S.idleCenter}>
-              <View style={S.idleArt}>
-                <Ionicons name="musical-notes" size={20} color="rgba(255,255,255,0.3)" />
-              </View>
-              <View>
-                <Text style={S.idleTitle}>Nothing playing</Text>
-                <Text style={S.idleSub}>Pick a song, podcast, or live station</Text>
-              </View>
-            </View>
-          </BlurView>
-        </Animated.View>
-      </Animated.View>
-    );
-  }
+  // Hide bar completely when nothing is loaded
+  if (!currentItem) return null;
 
   const getImage = () => {
     if (!image) return null;
