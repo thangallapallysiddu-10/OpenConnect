@@ -40,4 +40,31 @@ export const AuthRepository = {
     return (await query<{id:string}>(`INSERT INTO devices(user_id,device_id,device_type,last_login,updated_at) VALUES($1,$2,$3,now(),now()) ON CONFLICT(user_id,device_id) DO UPDATE SET device_type=EXCLUDED.device_type,last_login=now(),updated_at=now() RETURNING id`,[userId,key,toDeviceType(platform)])).rows[0];
   },
   storeToken: async (client:PoolClient,userId:string,familyId:string,hash:string,deviceId:string|null,expiresAt:Date) => (await client.query<{id:string}>('INSERT INTO refresh_tokens(user_id,family_id,token_hash,device_id,expires_at) VALUES($1,$2,$3,$4,$5) RETURNING id',[userId,familyId,hash,deviceId,expiresAt])).rows[0],
+
+  /**
+   * Find an existing user by email (for Google OAuth) or create one without a
+   * password. The password_hash is set to an unusable sentinel so the account
+   * can never be used for email/password login.
+   */
+  findOrCreateOAuthUser: async (
+    email: string,
+    displayName: string,
+    avatarUrl: string | null,
+  ): Promise<UserRow> => {
+    // Try to find the existing account first.
+    const existing = await query<UserRow>(
+      `SELECT ${userFields} FROM users WHERE lower(email) = lower($1)`,
+      [email],
+    );
+    if (existing.rows[0]) return existing.rows[0];
+
+    // Create a new account — password_hash sentinel makes email/password login impossible.
+    const created = await query<UserRow>(
+      `INSERT INTO users (email, password_hash, display_name, avatar_url)
+       VALUES ($1, $2, $3, $4)
+       RETURNING ${safeFields}`,
+      [email.toLowerCase(), 'oauth:google:no-password', displayName, avatarUrl],
+    );
+    return created.rows[0];
+  },
 };

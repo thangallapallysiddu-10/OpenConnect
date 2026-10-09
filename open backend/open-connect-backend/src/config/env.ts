@@ -24,6 +24,11 @@ const schema = z.object({
   CORS_ORIGIN: z.string().default('*'),
   LOG_LEVEL: z.string().default('info'),
   CACHE_TTL_SECONDS: z.coerce.number().int().positive().default(300),
+  // ── Google OAuth ──────────────────────────────────────────────────────────
+  GOOGLE_CLIENT_ID: z.string().optional(),
+  GOOGLE_CLIENT_SECRET: z.string().optional(),
+  // The deployed frontend URL — used to redirect back after Google OAuth
+  FRONTEND_URL: z.string().default('http://localhost:8081'),
 });
 
 export const env = schema.parse(process.env);

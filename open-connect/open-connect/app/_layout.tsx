@@ -1,6 +1,7 @@
 import '../global.css';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { useEffect } from 'react';
 import { StyleSheet, useWindowDimensions, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
@@ -18,7 +19,7 @@ import { PlayerProvider } from '../src/context/PlayerContext';
 import { PodcastProvider } from '../src/context/PodcastContext';
 import { RJLiveProvider } from '../src/context/RJLiveContext';
 import { ThemeProvider, useTheme } from '../src/context/ThemeContext';
-import { AuthProvider } from '../src/context/AuthContext';
+import { AuthProvider, useAuth } from '../src/context/AuthContext';
 import { AuthModal } from '../src/components/Auth/AuthModal';
 import { ProfileModal } from '../src/components/Auth/ProfileModal';
 import { NotificationProvider } from '../src/context/NotificationContext';
@@ -112,6 +113,50 @@ function MobileLayout() {
 function RootLayoutContent() {
   const { width } = useWindowDimensions();
   const isDesktop = width >= DESKTOP_BREAKPOINT;
+  const { setAuthSession, isLoggedIn } = useAuth();
+
+  /**
+   * Google OAuth callback handler.
+   * After the backend redirects to /?auth=google&access_token=...&...
+   * we read the params once, hydrate the auth session, then clean the URL.
+   */
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    const params = new URLSearchParams(window.location.search);
+    const authType = params.get('auth');
+
+    if (authType === 'google') {
+      const accessToken = params.get('access_token');
+      const refreshToken = params.get('refresh_token');
+      const displayName = params.get('display_name') ?? '';
+      const email = params.get('email') ?? '';
+      const role = params.get('role') ?? 'user';
+      const avatarUrl = params.get('avatar_url') ?? undefined;
+
+      if (accessToken && refreshToken && email) {
+        setAuthSession({
+          user: { name: displayName || email, email, role, avatarUrl },
+          accessToken,
+          refreshToken,
+        });
+      }
+
+      // Clean the tokens out of the URL immediately — they shouldn't sit in
+      // the address bar or browser history.
+      const clean = window.location.pathname;
+      window.history.replaceState({}, document.title, clean);
+    }
+
+    if (authType === 'error') {
+      const reason = params.get('reason') ?? 'unknown';
+      console.warn('Google OAuth failed:', reason);
+      // Clean URL
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  // Run once on mount only
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <>

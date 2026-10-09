@@ -9,13 +9,22 @@ import {
   TouchableOpacity,
   useWindowDimensions,
   View,
-  Alert,
   Platform,
 } from 'react-native';
 import { useAuth } from '../../context/AuthContext';
 import { ApiRequestError } from '../../services/api';
 import { login, register } from '../../services/auth.service';
 import { useTheme } from '../../context/ThemeContext';
+import { API_BASE_URL } from '../../services/api';
+
+// The backend Google OAuth entry point — opens in the same browser tab.
+const GOOGLE_AUTH_URL = `${API_BASE_URL}/api/v1/auth/google`;
+
+function openGoogleAuth() {
+  if (typeof window !== 'undefined') {
+    window.location.href = GOOGLE_AUTH_URL;
+  }
+}
 
 type ValidationDetails = {
   formErrors?: string[];
@@ -313,9 +322,7 @@ export const AuthModal = () => {
                 <View style={[styles.divider, { backgroundColor: colors.border }]} />
               </View>
 
-              <TouchableOpacity style={[styles.googleBtn, { borderColor: colors.border, backgroundColor: isDark ? '#1C1C24' : '#FFFFFF' }]} onPress={() => {
-                Alert.alert('Google login unavailable', 'Google authentication will be connected in Phase 8.');
-              }}>
+              <TouchableOpacity style={[styles.googleBtn, { borderColor: colors.border, backgroundColor: isDark ? '#1C1C24' : '#FFFFFF' }]} onPress={openGoogleAuth}>
                 <Ionicons name="logo-google" size={20} color={isDark ? '#FFF' : '#333'} />
                 <Text style={[styles.googleBtnText, { color: colors.text }]}>Continue with Google</Text>
               </TouchableOpacity>
@@ -372,6 +379,20 @@ export const AuthModal = () => {
                 disabled={loading}
               >
                 <Text style={styles.primaryBtnText}>{loading ? 'Signing Up...' : 'Sign Up'}</Text>
+              </TouchableOpacity>
+
+              <View style={styles.dividerBox}>
+                <View style={[styles.divider, { backgroundColor: colors.border }]} />
+                <Text style={[styles.dividerText, { color: colors.textMuted }]}>OR</Text>
+                <View style={[styles.divider, { backgroundColor: colors.border }]} />
+              </View>
+
+              <TouchableOpacity
+                style={[styles.googleBtn, { borderColor: colors.border, backgroundColor: isDark ? '#1C1C24' : '#FFFFFF' }]}
+                onPress={openGoogleAuth}
+              >
+                <Ionicons name="logo-google" size={20} color={isDark ? '#FFF' : '#333'} />
+                <Text style={[styles.googleBtnText, { color: colors.text }]}>Continue with Google</Text>
               </TouchableOpacity>
 
               <View style={styles.footerRow}>
