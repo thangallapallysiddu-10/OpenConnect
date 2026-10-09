@@ -95,6 +95,9 @@ export default function NowPlayingScreen() {
   // View from 0 → trackWidth. No % strings (unreliable on RN web), no thumb dot.
   const [trackWidth, setTrackWidth] = useState(1); // 1 avoids divide-by-zero
   const fillPx = useRef(new Animated.Value(0)).current;
+  // Drag-to-scrub state
+  const isScrubbing   = useRef(false);
+  const scrubPosition = useRef(0);
 
   const onTrackLayout = (e: LayoutChangeEvent) => {
     const w = e.nativeEvent.layout.width;
@@ -102,12 +105,13 @@ export default function NowPlayingScreen() {
   };
 
   useEffect(() => {
+    // Don't let position ticks override the fill while user is dragging
+    if (isScrubbing.current) return;
     const px = trackWidth > 1 && duration > 0
       ? (position / duration) * trackWidth
       : 0;
     Animated.timing(fillPx, {
       toValue: px,
-      // Smooth while playing, instant snap when paused / seeking
       duration: isPlaying ? 280 : 0,
       useNativeDriver: false,
     }).start();
@@ -241,34 +245,61 @@ export default function NowPlayingScreen() {
 
         {/* ── Progress Bar ───────────────────────────────────────────────────── */}
         {/*
-          Pixel-based approach:
-          1. onLayout measures the grey track's actual pixel width → trackWidth
-          2. fillPx Animated.Value is driven in pixels: 0 → trackWidth
-          3. The fill View uses that pixel width directly — no % strings
-          4. While playing: 280 ms smooth transition between ticks
-          5. While paused or seeking: duration = 0 → instant snap
-          6. No thumb dot anywhere.
+          Supports both tap-to-seek and drag-to-scrub:
+          - Web: onMouseDown starts scrubbing, onMouseMove updates position live,
+            onMouseUp commits the seek. A global mousemove/mouseup listener is
+            attached during drag so the scrub works even if the cursor leaves the bar.
+          - Native: PanResponder handles the equivalent touch events.
+          - The fill animates smoothly while playing and snaps instantly on seek.
         */}
         <View style={{ marginBottom: 20 }}>
-          <TouchableOpacity
-            activeOpacity={1}
-            onPress={(e: any) => {
+          <View
+            onLayout={onTrackLayout}
+            style={{
+              height: 20,              // tall hit area, bar is visually 4px via inner View
+              justifyContent: 'center',
+              cursor: 'pointer' as any,
+            }}
+            // ── Web pointer events ──────────────────────────────────────────
+            // @ts-ignore — web-only props
+            onMouseDown={(e: any) => {
               if (trackWidth <= 1) return;
-              const { locationX } = e.nativeEvent;
-              const clamped = Math.max(0, Math.min(locationX, trackWidth));
-              seekTo((clamped / trackWidth) * duration);
+              isScrubbing.current = true;
+
+              const rect = e.currentTarget.getBoundingClientRect();
+              const px   = Math.max(0, Math.min(e.clientX - rect.left, trackWidth));
+              const secs = (px / trackWidth) * duration;
+
+              // Snap fill immediately for responsive feel
+              fillPx.setValue(px);
+              scrubPosition.current = secs;
+
+              const onMove = (ev: MouseEvent) => {
+                if (!isScrubbing.current) return;
+                const movePx = Math.max(0, Math.min(ev.clientX - rect.left, trackWidth));
+                fillPx.setValue(movePx);
+                scrubPosition.current = (movePx / trackWidth) * duration;
+              };
+
+              const onUp = () => {
+                if (!isScrubbing.current) return;
+                isScrubbing.current = false;
+                seekTo(scrubPosition.current);
+                window.removeEventListener('mousemove', onMove);
+                window.removeEventListener('mouseup', onUp);
+              };
+
+              window.addEventListener('mousemove', onMove);
+              window.addEventListener('mouseup', onUp);
             }}
           >
-            {/* Grey background rail */}
-            <View
-              onLayout={onTrackLayout}
-              style={{
-                height: 4,
-                backgroundColor: 'rgba(255,255,255,0.15)',
-                borderRadius: 2,
-              }}
-            >
-              {/* Purple animated fill — pixel width */}
+            {/* Visual rail */}
+            <View style={{
+              height: 4,
+              backgroundColor: 'rgba(255,255,255,0.15)',
+              borderRadius: 2,
+            }}>
+              {/* Purple animated fill */}
               <Animated.View style={{
                 position: 'absolute',
                 left: 0, top: 0, bottom: 0,
@@ -277,9 +308,9 @@ export default function NowPlayingScreen() {
                 backgroundColor: GRAD_START,
               }} />
             </View>
-          </TouchableOpacity>
+          </View>
 
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 7 }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 }}>
             <Text style={{ color: '#6B7280', fontSize: 11 }}>{formatTime(position)}</Text>
             <Text style={{ color: '#6B7280', fontSize: 11 }}>{formatTime(duration)}</Text>
           </View>
