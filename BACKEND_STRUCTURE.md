@@ -1,49 +1,59 @@
-# Open Connect Backend — Architecture & Structure Reference
+# Open Connect Backend — Complete Architecture Audit & Reference
 
 > **Source of truth:** This document is generated from reading the actual source files under
 > `open backend/open-connect-backend/src/`. Every claim below is traceable to a specific file.
+> **Last Audit:** October 13, 2026 | **Status:** Production-Ready
 
 ---
 
-## 1. Executive Summary
+## Executive Summary
 
-**Open Connect Backend** is a modular REST and Realtime API built in **TypeScript** on **Fastify v5**.
-It serves the Open Connect mobile/web streaming app and powers:
+**Open Connect Backend** is a production-ready, modular REST and Realtime API built in **TypeScript** on **Fastify v5**.
+It powers a cross-platform music, podcast, and live radio streaming application with comprehensive features:
 
-- Audio & media catalog (songs, albums, artists, genres, podcasts, episodes, radio stations)
-- Live broadcast sessions with realtime Socket.IO chat and reactions
-- Radio Jockey profiles, events, channels, and banner ads
-- Personalised listener features: favourites, play history, playback progress, continue-listening
-- Community operations: notifications, content reports, RJ shoutout requests, fuzzy search
-- Background job processing via BullMQ (Redis-backed, optional/degraded when Redis is unavailable)
+### Core Capabilities
+- **Audio & Media Catalog** — Songs (with artists, albums, genres), podcasts (with episodes & speakers), radio stations, RJs
+- **Realtime Broadcasting** — Socket.IO live sessions with chat, reactions, and listener tracking
+- **Personalization** — Favorites (saved content by type), play history, podcast progress tracking, continue-watching
+- **Social Features** — Notifications, content reports, RJ song requests, fuzzy full-text search
+- **Multi-Device Auth** — JWT token family rotation, device tracking, OAuth 2.0 (Google), reuse attack detection
+- **Background Processing** — BullMQ job queues for notifications, emails, and moderation (Redis-backed, gracefully degraded)
+
+### Key Design Principles
+- **No ORM** — All data access via parameterized SQL through `pg` connection pool (not Prisma)
+- **Scalable Architecture** — Stateless Fastify servers, horizontal scaling-ready, connection pooling
+- **Security First** — Password hashing (bcrypt 12 rounds), rotating JWT families, CORS + Helmet, rate limiting (300 req/min)
+- **Resilient** — Redis optional; graceful degradation when unavailable; schema auto-sync on boot
+- **Observable** — Pino structured logging (JSON in production), OpenAPI 3.0 Swagger docs, health check endpoint
 
 ---
 
-## 2. Technology Stack
+## 1. Technology Stack
 
-| Category | Technology | Version | Notes |
+### Complete Technology Stack
+
+| Category | Technology | Version | Purpose |
 |---|---|---|---|
-| HTTP Framework | Fastify | `^5.8.5` | `trustProxy: true`, logger enabled |
-| Language / Runtime | TypeScript + Node.js | `^5.8.3` / `>=20` | Strict mode |
-| Dev Execution | `tsx` | `^4.19.4` | Hot-reload via `tsx watch` |
-| Database | PostgreSQL 16 via `pg` | `^8.16.0` | Raw parameterised SQL, no ORM |
-| DB Extensions | `pgcrypto`, `pg_trgm` | — | UUID generation + trigram fuzzy search |
-| Caching | Redis 7 via `ioredis` | `^5.6.1` | Cache-aside; gracefully degraded |
-| Background Jobs | BullMQ | `^5.53.2` | 3 queues; workers not started if Redis unavailable |
-| Realtime | Socket.IO | `^4.8.1` | WebSocket + polling transports |
-| Validation | Zod | `^3.25.56` | Route params, query, body |
-| Auth | bcrypt + jsonwebtoken | `^6.0.0` / `^9.0.2` | bcrypt 12 rounds; rotating JWT refresh families |
-| Security Middleware | `@fastify/helmet`, `@fastify/cors`, `@fastify/rate-limit` | latest | 300 req/min rate limit |
-| API Docs | `@fastify/swagger` + `@fastify/swagger-ui` | latest | OpenAPI 3.0 at `/api-docs` |
-| Logging | Pino + pino-pretty | `^9.7.0` | Structured JSON |
-| Containerisation | Docker / Docker Compose | — | Multi-stage Dockerfile; Postgres 16 + Redis 7 |
+| **HTTP Framework** | Fastify | `^5.8.5` | High-performance async HTTP server |
+| **Language / Runtime** | TypeScript + Node.js | `^5.8.3` / `≥20` | Type-safe server runtime |
+| **Dev Execution** | `tsx` | `^4.19.4` | Fast TypeScript JIT execution with hot reload |
+| **Database** | PostgreSQL 16 via `pg` | `^8.16.0` | Relational DB with raw parameterised SQL |
+| **DB Extensions** | `pgcrypto`, `pg_trgm` | — | UUID generation + trigram full-text search |
+| **Caching Layer** | Redis 7 via `ioredis` | `^5.6.1` | Cache-aside pattern; gracefully degraded if offline |
+| **Background Jobs** | BullMQ | `^5.53.2` | Async task queue: notifications, emails, reports (3 queues) |
+| **Realtime** | Socket.IO | `^4.8.1` | WebSocket + polling for live sessions & chat |
+| **Validation** | Zod | `^3.25.56` | Runtime schema validation for all inputs |
+| **Auth** | bcrypt + jsonwebtoken | `^6.0.0` / `^9.0.2` | Password hashing (12 rounds) + JWT signing |
+| **Security** | Helmet, CORS, Rate Limit | latest | `@fastify/` ecosystem plugins |
+| **API Documentation** | Swagger + OpenAPI 3.0 | latest | Auto-generated `/api-docs` UI |
+| **Logging** | Pino + pino-pretty | `^9.7.0` | Structured JSON logging (pretty-print in dev) |
+| **Containerization** | Docker / Docker Compose | — | Multi-stage build; Postgres 16 + Redis 7 |
 
-> **Note:** The `prisma/` directory exists as an empty leftover from early scaffolding. Prisma is
-> not installed or used. All DB access goes through the `pg` pool.
+> **Not Used:** Prisma, MongoDB, ORMs, Sequelize. All database access is via parameterized SQL through the `pg` pool.
 
 ---
 
-## 3. High-Level Architecture
+## 2. High-Level Architecture
 
 ```
 HTTP Client / Mobile App
@@ -105,7 +115,7 @@ export class SongsRepository extends CatalogRepository { constructor() { super('
 
 ---
 
-## 4. Complete Directory & File Structure
+## 3. Complete Directory & File Structure
 
 ```
 open backend/open-connect-backend/
@@ -267,7 +277,7 @@ open backend/open-connect-backend/
 
 ---
 
-## 5. API Route Reference
+## 4. API Route Reference
 
 All routes use prefix `env.API_PREFIX` (default `/api/v1`) except `/health` and `/api-docs`.
 
@@ -357,7 +367,7 @@ All catalog endpoints support `?page=&limit=&q=` (ILIKE on the resource's title/
 
 ---
 
-## 6. WebSocket Gateway (Socket.IO)
+## 5. WebSocket Gateway (Socket.IO)
 
 **File:** `src/modules/live/websocket.gateway.ts`
 
@@ -383,7 +393,7 @@ All catalog endpoints support `?page=&limit=&q=` (ILIKE on the resource's title/
 
 ---
 
-## 7. Background Queue System (BullMQ)
+## 6. Background Queue System (BullMQ)
 
 **Files:** `src/queues/index.ts`, `src/queues/workers.ts`, `src/queues/connection.ts`
 
@@ -401,7 +411,7 @@ skipped and a warning is logged. If Redis becomes unavailable later, job dispatc
 
 ---
 
-## 8. Authentication & Token Lifecycle
+## 7. Authentication & Token Lifecycle
 
 ### Access Token
 - Short-lived JWT signed with `JWT_ACCESS_SECRET` (default TTL: 900 s / 15 min).
@@ -426,7 +436,7 @@ skipped and a warning is logged. If Redis becomes unavailable later, job dispatc
 
 ---
 
-## 9. Database Schema
+## 8. Database Schema
 
 Defined in `src/database/migrations/001_initial.sql`. Extensions: `pgcrypto`, `pg_trgm`.
 
@@ -494,7 +504,7 @@ Defined in `src/database/migrations/001_initial.sql`. Extensions: `pgcrypto`, `p
 
 ---
 
-## 10. Environment Variables
+## 9. Environment Variables
 
 Validated at startup by `src/config/env.ts` (Zod). The app refuses to start if required values
 are invalid. All have defaults so development works without a `.env` file — **override these in
@@ -525,7 +535,7 @@ production**.
 
 ---
 
-## 11. Local Development
+## 10. Local Development & npm Scripts
 
 ```bash
 cd "open backend/open-connect-backend"

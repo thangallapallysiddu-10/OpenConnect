@@ -1,367 +1,379 @@
 # Open Connect Backend
 
-Production-oriented TypeScript API for the **Open Connect** Expo mobile and web streaming application. Built on **Fastify 5**, raw parameterized PostgreSQL queries via `pg`, Redis cache-aside caching, rotating JWT refresh-token families, BullMQ background queues, Socket.IO realtime gateway, Zod validation, Pino logging, and OpenAPI 3.0 documentation.
+Production-oriented TypeScript REST + Realtime API for the **Open Connect** Expo mobile and web streaming application. 
 
-> Prisma and MongoDB are not used. All database operations use parameterized SQL through the `pg` connection pool.
+Built on **Fastify 5**, raw parameterized PostgreSQL queries, Redis cache-aside, rotating JWT refresh-token families, BullMQ background job queues, Socket.IO realtime gateway, Zod validation, Pino structured logging, and comprehensive OpenAPI 3.0 documentation.
 
----
-
-## Tech Stack
-
-| Category | Technology | Version |
-| :--- | :--- | :--- |
-| HTTP Framework | Fastify | `^5.8.5` |
-| Language & Runtime | TypeScript / Node.js ≥20 | `^5.8.3` |
-| Dev Execution | `tsx` | `^4.19.4` |
-| Database | PostgreSQL 16 via `pg` | `^8.16.0` |
-| DB Extensions | `pgcrypto`, `pg_trgm` | — |
-| Caching | Redis 7 via `ioredis` | `^5.6.1` |
-| Background Jobs | BullMQ | `^5.53.2` |
-| Realtime | Socket.IO | `^4.8.1` |
-| Validation | Zod | `^3.25.56` |
-| Auth | `bcrypt` / `jsonwebtoken` | `^6.0.0` / `^9.0.2` |
-| Security Middleware | `@fastify/helmet`, `@fastify/cors`, `@fastify/rate-limit` | Latest |
-| API Docs | `@fastify/swagger` + `@fastify/swagger-ui` | Latest |
-| Logging | Pino / `pino-pretty` | `^9.7.0` |
+> **No ORMs:** Prisma and MongoDB are not used. All database operations use parameterized SQL through the `pg` connection pool for maximum control and performance.
 
 ---
 
-## Quick Start
+## Quick Start (Local Development)
+
+### Prerequisites
+- **Node.js** ≥20 (check: `node --version`)
+- **Docker** + **Docker Compose** (check: `docker --version`, `docker compose version`)
+- **Git** (for version control)
+
+### Step-by-Step Setup
 
 ```bash
-# 1. Copy and configure environment
-cp .env.example .env
-# Edit .env — replace JWT_ACCESS_SECRET and JWT_REFRESH_SECRET with 32+ random chars
+# 1. Navigate to backend directory
+cd "open backend/open-connect-backend"
 
-# 2. Install dependencies
+# 2. Copy environment template
+cp .env.example .env
+
+# 3. Generate secure JWT secrets (auto-inserts into .env)
+npm run setup:local
+# For macOS/Linux, use: npm run setup:local:unix
+
+# 4. Install Node dependencies
 npm install
 
-# 3. Start PostgreSQL and Redis via Docker
+# 5. Start PostgreSQL and Redis containers
 npm run infra:up
 
-# 4. Run database migrations
+# 6. Run database migrations (creates schema)
 npm run migrate
 
-# 5. Seed default data (admin user, genres, stations)
+# 7. Seed initial data (admin user, genres, sample stations)
 npm run seed
 
-# 6. Start development server with hot reload
+# 8. Start development server with hot reload
 npm run dev
 ```
 
-| Endpoint | URL |
-| :--- | :--- |
-| API Server | `http://localhost:3000` |
-| Health Check | `http://localhost:3000/health` |
-| Swagger UI | `http://localhost:3000/api-docs` |
-| REST prefix | `/api/v1` |
+### Access Points After Startup
 
-> Default seeded admin: `admin@openconnect.local` / `AdminPass123!`  
-> Override the password via `SEED_ADMIN_PASSWORD`. Never use the default in production.
+| Service | URL | Purpose |
+| :--- | :--- | :--- |
+| API Server | `http://localhost:3000` | REST API root |
+| Health Check | `http://localhost:3000/health` | Service status probe |
+| Swagger UI | `http://localhost:3000/api-docs` | Interactive API docs |
+| REST API | `http://localhost:3000/api/v1/...` | All routes prefixed here |
 
-For the fully containerized stack (API + Postgres + Redis): `docker compose up --build`. The API container applies pending migrations before startup.
+### Default Seeded Admin Account
+
+- **Email:** `admin@openconnect.local`
+- **Password:** `AdminPass123!`
+
+> ⚠️ **Development only.** Never use these credentials in production. Override the seed password via `SEED_ADMIN_PASSWORD` environment variable.
+
+### Using Docker Compose (Fully Containerized)
+
+To run the entire stack (API + PostgreSQL + Redis) in containers:
+
+```bash
+docker compose up --build
+# This:
+#   1. Builds the Dockerfile (multi-stage: TypeScript compile + slim prod image)
+#   2. Spins up postgres:16 and redis:7 containers
+#   3. Runs migrations on container startup
+#   4. Exposes port 3000 for the API
+```
+
+Stop services:
+```bash
+docker compose down
+```
+
+Stop and remove all data (volumes):
+```bash
+docker compose down -v
+```
 
 ---
 
 ## Environment Variables
 
+All variables are validated at startup using Zod. The app refuses to start if critical values are invalid or unset. Most have sensible defaults for local development.
+
+### Required for Production
+
+| Variable | Default | Description | Security Note |
+| :--- | :--- | :--- | :--- |
+| `JWT_ACCESS_SECRET` | *(dev placeholder)* | 32+ random characters | ⚠️ **Must be changed in production** |
+| `JWT_REFRESH_SECRET` | *(dev placeholder)* | 32+ random characters, different from `JWT_ACCESS_SECRET` | ⚠️ **Must be changed in production** |
+| `DATABASE_URL` | `postgres://localhost/openconnect` | PostgreSQL connection string | Use strong password in production |
+| `REDIS_URL` or `REDIS_HOST`+`REDIS_PORT` | localhost:6379 | Redis connection | Optional; gracefully degraded if offline |
+
+### Optional / Development
+
 | Variable | Default | Description |
 | :--- | :--- | :--- |
-| `NODE_ENV` | `development` | Runtime environment |
-| `PORT` | `3000` | HTTP port |
-| `HOST` | `0.0.0.0` | Bind address |
-| `API_PREFIX` | `/api/v1` | Route prefix |
-| `DATABASE_URL` | — | PostgreSQL connection string |
-| `DATABASE_SSL` | `false` | Enable SSL for DB |
-| `DB_POOL_MAX` | `20` | Max pool connections |
-| `REDIS_ENABLED` | `true` | Enable Redis |
-| `REDIS_HOST` | `127.0.0.1` | Redis host |
-| `REDIS_PORT` | `6379` | Redis port |
-| `REDIS_PASSWORD` | — | Redis auth password |
-| `REDIS_DB` | `0` | Redis DB index |
-| `REDIS_URL` | — | Alternative to individual Redis vars |
-| `JWT_ACCESS_SECRET` | — | **Replace in production** |
-| `JWT_REFRESH_SECRET` | — | **Replace in production** |
-| `ACCESS_TOKEN_TTL_SECONDS` | `900` | Access token lifetime (15 min) |
-| `REFRESH_TOKEN_TTL_DAYS` | `30` | Refresh token lifetime |
-| `CORS_ORIGIN` | `http://localhost:8081` | Allowed origins (comma-separated) |
-| `LOG_LEVEL` | `info` | Pino log level |
-| `CACHE_TTL_SECONDS` | `300` | Default Redis cache TTL |
+| `NODE_ENV` | `development` | `development` \| `test` \| `production` |
+| `PORT` | `3000` | HTTP listen port |
+| `HOST` | `0.0.0.0` | HTTP bind address (0.0.0.0 = all interfaces) |
+| `API_PREFIX` | `/api/v1` | REST API route prefix |
+| `DATABASE_SSL` | `false` | Set `true` for Neon / managed Postgres |
+| `DB_POOL_MAX` | `20` | pg pool max connections; increase for high concurrency |
+| `REDIS_ENABLED` | `true` | Set `false` to disable Redis entirely (no caching, no queues) |
+| `REDIS_PASSWORD` | `` | Redis auth password if required |
+| `REDIS_DB` | `0` | Redis logical database index |
+| `ACCESS_TOKEN_TTL_SECONDS` | `900` | Access token lifetime (900 = 15 min) |
+| `REFRESH_TOKEN_TTL_DAYS` | `30` | Refresh token lifetime (30 days) |
+| `CORS_ORIGIN` | `http://localhost:8081` | Comma-separated allowed origins; `*` = all |
+| `LOG_LEVEL` | `info` | Pino log level (`debug`, `info`, `warn`, `error`) |
+| `CACHE_TTL_SECONDS` | `300` | Default Redis cache TTL for catalog data (5 min) |
+| `SEED_ADMIN_PASSWORD` | `AdminPass123!` | Initial admin password (dev only; change immediately) |
+
+### Generating Secure Secrets
+
+Use the provided script to auto-generate 32+ character random secrets and update `.env`:
+
+```bash
+# Auto-generates JWT_ACCESS_SECRET and JWT_REFRESH_SECRET, updates .env
+npm run setup:local    # Windows PowerShell
+npm run setup:local:unix  # macOS / Linux
+```
+
+Or manually (bash):
+```bash
+openssl rand -hex 32  # generates 64-char hex string
+```
 
 ---
 
-## Redis
+## Redis Integration
 
-Redis is optional in development. When unavailable:
-- Cache operations become no-ops
-- BullMQ queue jobs are skipped with warnings
+Redis powers three features: **caching**, **background job queues**, and **realtime room management**.
+
+### Redis Optional (Graceful Degradation)
+
+When Redis is unavailable:
+- Cache operations become no-ops (all catalog queries hit the DB directly)
+- Background job workers are skipped; jobs logged and discarded
 - `/health` returns `{ "status": "degraded", "redis": false }`
+- The API **continues to function** — just slower without cache
 
-Run Redis standalone:
+**To disable Redis in development** (e.g., no Docker):
+
 ```bash
+REDIS_ENABLED=false npm run dev
+```
+
+### Redis Setup
+
+**Option 1: Docker Compose (Recommended)**
+
+```bash
+npm run infra:up  # Starts postgres:16 + redis:7
+npm run infra:down  # Stops both
+```
+
+**Option 2: Standalone Redis**
+
+```bash
+# Start Redis container only
 docker compose -f docker-compose.redis.yml up -d
 
-# Verify
+# Verify connectivity
 docker compose -f docker-compose.redis.yml exec redis redis-cli ping
 # → PONG
 
-curl http://localhost:3000/health
-# → { "status": "healthy", "database": true, "redis": true }
+# Inspect data
+docker compose -f docker-compose.redis.yml exec redis redis-cli
+# redis:6379> KEYS *
+# redis:6379> GET <key>
 ```
 
-Disable Redis for local development without Docker:
+**Option 3: Redis Cloud / Managed Service**
+
+Set `REDIS_URL` to your managed instance:
 ```bash
-REDIS_ENABLED=false
+REDIS_URL=redis://username:password@host.com:6379 npm run dev
 ```
 
 ---
 
-## Authentication
+## API Overview
 
-- **Access tokens** expire after 15 minutes (configurable via `ACCESS_TOKEN_TTL_SECONDS`), signed with `JWT_ACCESS_SECRET`. Claims: `{ sub, email, role }`.
-- **Refresh tokens** are random 48-byte values stored as SHA-256 hashes, grouped in families. Exchanging via `/auth/refresh` atomically revokes the old token and issues a replacement in the same family.
-- **Reuse detection:** presenting a revoked refresh token immediately revokes the entire family.
-- Register and login accept `deviceKey`, `platform`, and an optional `pushToken` to support multi-device sessions.
-- Send access tokens as `Authorization: Bearer <token>`.
+All routes use the prefix `/api/v1` unless noted.
+
+### Authentication Routes — `/api/v1/auth`
+
+| Method | Path | Auth | Payload / Notes |
+|---|---|---|---|
+| **POST** | `/register` | — | `{ email, password, displayName, deviceKey?, platform?, pushToken? }` — Creates account |
+| **POST** | `/login` | — | `{ email, password, deviceKey?, platform?, pushToken? }` — Returns access + refresh tokens |
+| **POST** | `/refresh` | — | `{ refreshToken }` — Rotates token family, returns new pair |
+| **POST** | `/logout` | — | `{ refreshToken }` — Revokes entire token family |
+| **GET** | `/me` | Bearer | Returns current user profile (without password hash) |
+
+### Users Routes — `/api/v1/users`
+
+| Method | Path | Auth | Payload / Notes |
+|---|---|---|---|
+| **GET** | `/me` | Bearer | Current user profile |
+| **PATCH** | `/me` | Bearer | `{ displayName?, avatarUrl?, bio?, location? }` — Updates selectively |
+| **GET** | `/` | Bearer + Admin | Paginated user list; `?q=` searches email/name; admin-only |
+
+### Home Feed — `/api/v1/home`
+
+| Method | Path | Auth | Response |
+|---|---|---|---|
+| **GET** | `/` | — | Aggregated feed: `{ trendingSongs, newSongs, podcasts, stations, rjs, events, channels, ads }` — Redis cached 60s |
+
+### Catalog Resources (Shared Generic Endpoints)
+
+All catalog endpoints support **pagination** (`?page=`, `?limit=`) and **search** (`?q=`):
+
+| Resource | List | Detail | Notes |
+|---|---|---|---|
+| **Songs** | `GET /songs` | `GET /songs/:id` | Joins artists, albums, genres; paginated; searchable |
+| **Podcasts** | `GET /podcasts` | `GET /podcasts/:id` | Includes episode count; searchable |
+| — | `GET /podcasts/:id/episodes` | — | Paginated episodes for a show |
+| **Stations** | `GET /stations` | `GET /stations/:id` | Ordered by listener count DESC |
+| **RJs** | `GET /rjs` | `GET /rjs/:id` | Joins station; ordered is_live DESC, listeners DESC |
+| **Events** | `GET /events` | `GET /events/:id` | Ordered by starts_at ASC (upcoming first) |
+| **Channels** | `GET /channels` | *(no detail)* | List only; used for live TV/streams |
+| **Ads** | `GET /ads` | *(no detail)* | List only; placement-aware, priority-sorted |
+
+### User Engagement Routes
+
+#### Favorites — `/api/v1/favorites`
+
+| Method | Path | Auth | Payload / Notes |
+|---|---|---|---|
+| **GET** | `/` | Bearer | Returns all saved items grouped by type |
+| **POST** | `/:type/:id` | Bearer | `type ∈ { song, podcast, station, rj }` — adds or updates |
+| **DELETE** | `/:type/:id` | Bearer | Removes favorite |
+
+#### Play History & Playback Progress — `/api/v1`
+
+| Method | Path | Auth | Payload / Notes |
+|---|---|---|---|
+| **POST** | `/play-history` | Bearer | `{ contentType, contentId, playedSeconds }` — Records play event |
+| **GET** | `/play-history` | Bearer | Paginated listening history; newest first |
+| **PUT** | `/playback-progress/:episodeId` | Bearer | `{ progressSeconds, completed }` — Saves podcast progress |
+| **GET** | `/continue-listening` | Bearer | Unfinished podcast episodes; ready for resume |
+
+### Notifications & Community Routes
+
+#### Notifications — `/api/v1/notifications`
+
+| Method | Path | Auth | Payload / Notes |
+|---|---|---|---|
+| **GET** | `/` | Bearer | User notification inbox; max 100, newest first |
+| **POST** | `/subscriptions` | Bearer | `{ eventId? }` or `{ liveSessionId? }` (one required) |
+| **PATCH** | `/:id/read` | Bearer | Marks notification as read |
+
+#### Reports & Requests — `/api/v1`
+
+| Method | Path | Auth | Payload / Notes |
+|---|---|---|---|
+| **POST** | `/reports` | Bearer (required) | `{ targetType, targetId, reason, details? }` — `targetType ∈ { song, podcast, episode, station, rj, message }` |
+| **POST** | `/rj-requests` | Optional Bearer | `{ requesterName, rjName, stationName, location?, message? }` — Auth not required |
+
+#### Search — `/api/v1/search`
+
+| Method | Path | Auth | Query Params |
+|---|---|---|---|
+| **GET** | `/` | — | `?q=QUERY` (1–100 chars) + `?limit=` (1–50, default 10) — Trigram fuzzy search across 5 types |
+
+### System Routes
+
+| Method | Path | Auth | Notes |
+|---|---|---|---|
+| **GET** | `/health` | — | Health probe; returns `{ status, database, redis }` — Status: `healthy` / `degraded` / `unhealthy` |
+| **GET** | `/api-docs` | — | Swagger UI with interactive API explorer |
 
 ---
 
-## API Route Reference
+## WebSocket Gateway (Socket.IO)
 
-All routes are prefixed with `/api/v1` unless noted.
+Real-time live sessions: chat, reactions, listener tracking.
 
-### Auth
-| Method | Path | Description |
-| :--- | :--- | :--- |
-| `POST` | `/auth/register` | Create a new user account |
-| `POST` | `/auth/login` | Login; returns access + refresh tokens |
-| `POST` | `/auth/refresh` | Rotate refresh token; returns new token pair |
-| `POST` | `/auth/logout` | Revoke active refresh token family |
-| `GET` | `/auth/me` | Current user profile (requires Bearer token) |
+**Handshake Authentication:**
+- Supply JWT via `socket.handshake.auth.token` or `Authorization: Bearer <token>` header
+- Invalid/missing token → socket rejected
 
-### Users
-| Method | Path | Description |
-| :--- | :--- | :--- |
-| `GET` | `/users/me` | Current user profile |
-| `PATCH` | `/users/me` | Update display name, bio, location, avatar |
-| `GET` | `/users` | Admin only — paginated user list |
+### Socket Events (Client → Server)
 
-### Home Feed
-| Method | Path | Description |
-| :--- | :--- | :--- |
-| `GET` | `/home` | Aggregated home payload (trending songs, new releases, podcasts, active stations, live RJs, upcoming events, channels, active ads) — Redis cached |
+| Event | Payload | Server Action |
+|---|---|---|
+| `live:join` | `{ sessionId: UUID }` | Joins room `live:<sessionId>`; emits back `live:history` (last 100 msgs) |
+| `live:leave` | `{ sessionId: UUID }` | Leaves room; broadcasts updated listener count |
+| `live:message` | `{ sessionId, message }` | Persists to DB; broadcasts to room with user info |
+| `live:reaction` | `{ sessionId, reaction }` | Broadcasts emoji reaction (`like`, `love`, `fire`, `clap`) |
 
-### Catalog
-| Method | Path | Description |
-| :--- | :--- | :--- |
-| `GET` | `/songs` | Paginated song list with optional search |
-| `GET` | `/songs/:id` | Single song |
-| `GET` | `/podcasts` | Paginated podcast list |
-| `GET` | `/podcasts/:id` | Single podcast |
-| `GET` | `/podcasts/:id/episodes` | Paginated episodes for a podcast |
-| `GET` | `/stations` | Radio station list |
-| `GET` | `/stations/:id` | Single station |
-| `GET` | `/rjs` | Radio Jockey list |
-| `GET` | `/rjs/:id` | Single RJ |
-| `GET` | `/events` | Events & concerts list |
-| `GET` | `/events/:id` | Single event |
-| `GET` | `/channels` | Active streaming channels |
-| `GET` | `/ads` | Active banner advertisements |
+### Socket Events (Server → Client)
 
-### Playback & Engagement
-| Method | Path | Description |
-| :--- | :--- | :--- |
-| `GET` | `/favorites` | All favorites grouped by type |
-| `POST` | `/favorites/:type/:id` | Add favorite (`song`, `podcast`, `station`, `rj`) |
-| `DELETE` | `/favorites/:type/:id` | Remove favorite |
-| `POST` | `/play-history` | Record play event for song / episode / station |
-| `GET` | `/play-history` | Paginated user playback history |
-| `PUT` | `/playback-progress/:episodeId` | Save podcast episode position |
-| `GET` | `/continue-listening` | Unfinished episodes for resume playback |
+| Event | Payload |
+|---|---|
+| `live:history` | `[{ id, userId, message, createdAt }, ...]` — Last ≤100 messages (chronological) |
+| `live:message` | `{ id, userId, message, user: { id, email }, createdAt }` — New message |
+| `live:reaction` | `{ sessionId, userId, reaction }` — Emoji reaction broadcast |
+| `presence:update` | `{ sessionId, count }` — Updated listener count in room |
 
-### Notifications, Reports & Search
-| Method | Path | Description |
-| :--- | :--- | :--- |
-| `GET` | `/notifications` | User notification inbox |
-| `POST` | `/notifications/subscriptions` | Subscribe to live session or event reminder |
-| `PATCH` | `/notifications/:id/read` | Mark notification as read |
-| `POST` | `/reports` | File a content or message report |
-| `POST` | `/rj-requests` | Submit a song request or shoutout to an RJ |
-| `GET` | `/search?q=&limit=` | Trigram fuzzy search across songs, podcasts, stations, RJs, events |
-
-### System
-| Method | Path | Description |
-| :--- | :--- | :--- |
-| `GET` | `/health` | Health check — returns `healthy`, `degraded`, or `unhealthy` |
-| `GET` | `/api-docs` | Swagger UI |
-
----
-
-## Realtime Gateway (Socket.IO)
-
-Clients authenticate during handshake with `auth: { token }` or `Authorization: Bearer <token>`.
-
-| Event | Direction | Payload | Description |
-| :--- | :--- | :--- | :--- |
-| `live:join` | Client → Server | `{ sessionId }` | Join live room; receives `live:history` |
-| `live:leave` | Client → Server | `{ sessionId }` | Leave live room |
-| `live:message` | Client → Server | `{ sessionId, message }` | Send chat message; persisted and broadcast |
-| `live:reaction` | Client → Server | `{ sessionId, reaction }` | Broadcast emoji (`like`, `love`, `fire`, `clap`) |
-| `presence:update` | Server → Room | `{ count }` | Updated listener count after join/leave |
-
-When scaling across multiple API instances, configure a Socket.IO Redis adapter and use sticky sessions at the load balancer.
+**Scaling Tip:** For multiple API instances, configure a Socket.IO Redis adapter and use sticky sessions at your load balancer.
 
 ---
 
 ## Background Jobs (BullMQ)
 
-Workers start automatically on app boot. All queues retry up to 5 times with exponential backoff starting at 1 000 ms.
+Async workers start automatically on app boot. Jobs retry up to 5 times with exponential backoff (1000 ms initial).
 
-| Queue | Purpose |
-| :--- | :--- |
-| `notification.queue` | Asynchronously writes notification records to PostgreSQL |
-| `email.queue` | Dispatches transactional emails |
-| `report.queue` | Transitions new reports from `pending` → `reviewing` |
+| Queue | Purpose | When Triggered |
+|---|---|---|
+| `notification.queue` | Insert notification record into DB | After follow, new episode, event reminder, etc. |
+| `email.queue` | Dispatch transactional email | (No provider wired yet; logs only) |
+| `report.queue` | Moderate reported content | After user files a report; transitions `pending` → `reviewing` |
 
----
-
-## Database Schema
-
-Schema is applied via `src/database/migrations/001_initial.sql`. `compatibility.ts` runs idempotent checks at boot to keep the schema in sync without re-running migrations.
-
-### Enums
-- `user_role`: `user`, `admin`
-- `user_status`: `active`, `suspended`, `deleted`
-- `report_status`: `pending`, `reviewing`, `resolved`, `rejected`
-
-### Tables
-
-| Table | Description |
-| :--- | :--- |
-| `users` | User accounts with role and status |
-| `user_devices` | Per-device keys and push notification tokens |
-| `refresh_tokens` | SHA-256 hashed rotating token families |
-| `genres` | Music genre taxonomy |
-| `artists` | Musical artists |
-| `albums` | Albums linked to artists |
-| `songs` | Audio tracks with play counts and trending flag |
-| `podcast_categories` | Podcast taxonomy |
-| `speakers` | Podcast hosts and guests |
-| `podcasts` | Podcast shows |
-| `podcast_speakers` | Many-to-many junction for podcasts ↔ speakers |
-| `podcast_episodes` | Individual podcast episodes |
-| `radio_stations` | Live internet radio stations |
-| `rjs` | Radio Jockey profiles |
-| `live_sessions` | Scheduled and active broadcast sessions |
-| `live_chat_messages` | Chat messages scoped to live sessions |
-| `events` | Concerts, meetups, and live events |
-| `channels` | Live stream and video channels |
-| `ads` | Targeted banner advertisements |
-| `favorite_songs` | User bookmarked songs |
-| `favorite_podcasts` | User bookmarked podcasts |
-| `favorite_stations` | User bookmarked radio stations |
-| `favorite_rjs` | User bookmarked RJs |
-| `play_history` | Historical listening log per user |
-| `playback_progress` | Podcast episode resume checkpoints |
-| `notifications` | User notification inbox |
-| `notification_subscriptions` | Event and live session reminders |
-| `reports` | Inappropriate content reports |
-| `rj_requests` | Listener song requests and shoutouts |
-
-### Indexes
-- **GIN trigram** on `songs.title`, `artists.name`, `podcasts.title`, `radio_stations.name`, `rjs.name`, `events.title` — powers `/search`
-- **B-tree** on `users(lower(email))`, `refresh_tokens(user_id, family_id)`, `play_history(user_id, played_at DESC)`, `notifications(user_id, created_at DESC)`, and others
+If Redis is unavailable, workers are skipped with warnings; jobs are not processed.
 
 ---
 
-## Project Structure
+## Tech Stack
 
-```
-src/
-├── server.ts                   # Entrypoint — builds app and calls listen()
-├── app.ts                      # Fastify setup: plugins, routes, error handlers
-│
-├── config/
-│   ├── env.ts                  # Zod-validated environment variables
-│   ├── database.ts             # DB pool connection config
-│   ├── redis.ts                # Redis client and health check
-│   └── logger.ts               # Pino logger instance
-│
-├── database/
-│   ├── pool.ts                 # pg Pool + transaction helper
-│   ├── migrate.ts              # Migration runner (schema_migrations table)
-│   ├── compatibility.ts        # Boot-time idempotent schema sync
-│   ├── migrations/001_initial.sql
-│   └── seeds/seed.ts           # Default admin, genres, stations
-│
-├── shared/
-│   ├── cache/                  # cacheAside() + invalidation helpers
-│   ├── http/                   # AppError classes + response formatters
-│   ├── middleware/             # JWT auth hooks + Zod validation middleware
-│   ├── repositories/           # Generic CatalogRepository
-│   ├── routes/                 # Generic catalog route generator
-│   ├── security/               # bcrypt helpers + JWT utils
-│   ├── services/               # Generic CatalogService with Redis caching
-│   └── utils/                  # Pagination parsing + SQL helpers
-│
-├── queues/
-│   ├── connection.ts           # BullMQ Redis connection
-│   ├── index.ts                # Queue registry + addQueueJob()
-│   └── workers.ts              # Worker handlers
-│
-├── plugins/
-│   ├── auth.ts                 # Auth plugin hook
-│   ├── swagger.ts              # Swagger + Swagger UI
-│   └── websocket.ts            # Socket.IO gateway export
-│
-└── modules/
-    ├── auth/                   # /auth/* — register, login, refresh, logout, me
-    ├── users/                  # /users/* — profile management
-    ├── home/                   # /home — aggregated home feed
-    ├── songs/                  # /songs
-    ├── podcasts/               # /podcasts + /podcasts/:id/episodes
-    ├── stations/               # /stations
-    ├── rjs/                    # /rjs
-    ├── events/                 # /events
-    ├── favorites/              # /favorites
-    ├── playback/               # /play-history, /playback-progress, /continue-listening
-    ├── live/                   # Socket.IO gateway + chat persistence
-    ├── notifications/          # /notifications
-    ├── reports/                # /reports, /rj-requests
-    └── search/                 # /search
-```
-
-> `modules/catalog/` and `modules/interactions/` are empty placeholder folders for future features. Catalog logic is implemented in `src/shared/`.
+| Category | Technology | Version | Purpose |
+| :--- | :--- | :--- | :--- |
+| HTTP Framework | Fastify | `^5.8.5` | Lightweight, fast async HTTP server |
+| Language & Runtime | TypeScript / Node.js | `^5.8.3` / `≥20` | Type-safe server with modern async/await |
+| Dev Execution | `tsx` | `^4.19.4` | Hot-reload TypeScript execution |
+| Database | PostgreSQL 16 | `^8.16.0` | Relational DB with full-text search |
+| DB Driver | `pg` (node-postgres) | `^8.16.0` | Parameterized queries, connection pooling |
+| DB Extensions | `pgcrypto`, `pg_trgm` | — | UUID generation, trigram search |
+| Cache Layer | Redis 7 via `ioredis` | `^5.6.1` | Cache-aside pattern (optional, gracefully degraded) |
+| Background Jobs | BullMQ | `^5.53.2` | 3 job queues with retry logic |
+| Realtime | Socket.IO | `^4.8.1` | WebSocket + polling for live events |
+| Input Validation | Zod | `^3.25.56` | Runtime schema validation |
+| Authentication | bcrypt + jsonwebtoken | `^6.0.0` / `^9.0.2` | Password hashing + JWT signing |
+| Security | `@fastify/*` plugins | latest | Helmet, CORS, Rate-Limiting |
+| API Docs | Swagger + OpenAPI 3.0 | latest | Auto-generated interactive `/api-docs` |
+| Logging | Pino + pino-pretty | `^9.7.0` | Structured JSON logging |
+| Containerization | Docker / Compose | — | Prod-ready multi-stage builds |
 
 ---
 
 ## npm Scripts
 
-| Script | Description |
-| :--- | :--- |
-| `npm run dev` | Start dev server with hot reload (`tsx watch`) |
-| `npm run build` | Compile TypeScript to `dist/` |
-| `npm run start` | Run compiled production build |
-| `npm run lint` | Type-check without emitting files |
-| `npm run migrate` | Run pending SQL migrations |
-| `npm run migrate:prod` | Same, from compiled dist |
-| `npm run seed` | Seed default data |
-| `npm run test` | Run Jest tests |
-| `npm run infra:up` | Start Postgres + Redis via Docker Compose |
-| `npm run infra:down` | Stop Docker Compose services |
-| `npm run setup:local` | Automated Windows local setup (PowerShell) |
-| `npm run setup:local:unix` | Automated Unix/macOS local setup |
+| Script | Command | Purpose |
+|---|---|---|
+| `dev` | `tsx watch src/server.ts` | Start dev server with hot reload |
+| `build` | `tsc` | Compile TypeScript to `dist/` |
+| `start` | `node dist/server.js` | Run production build |
+| `lint` | `tsc --noEmit` | Type-check without output |
+| `test` | `jest --runInBand` | Run unit tests (single thread) |
+| `migrate` | `tsx src/database/migrate.ts` | Run pending migrations |
+| `migrate:prod` | `node dist/database/migrate.js` | Run migrations from compiled build |
+| `seed` | `tsx src/database/seeds/seed.ts` | Seed initial data (admin, genres, stations) |
+| `infra:up` | `docker compose up -d` | Start Postgres + Redis containers |
+| `infra:down` | `docker compose down` | Stop containers |
+| `setup:local` | `powershell -f scripts/setup-local.ps1` | Auto-setup on Windows |
+| `setup:local:unix` | `bash scripts/setup-local.sh` | Auto-setup on macOS / Linux |
 
 ---
 
-## Frontend
+## Frontend Integration
 
 The companion mobile and web app is **Open Connect** (also branded **Melody Meet** on desktop) — a universal Expo SDK 54 / React Native application using Expo Router, NativeWind, and Socket.IO.
 
 **Frontend location:** `c:/Kravix/open-connect/open-connect/`
 
 ```bash
-cd "c:/Kravix/open-connect/open-connect"
+cd "open-connect/open-connect"
 npm install
 npx expo start
 # w = web (desktop Spotify layout at localhost:8081)
@@ -374,13 +386,27 @@ The frontend points to `http://localhost:3000/api/v1` (web/iOS) or `http://10.0.
 
 ---
 
-## Production Checklist
+## Production Deployment Checklist
 
-- Replace `JWT_ACCESS_SECRET` and `JWT_REFRESH_SECRET` with cryptographically random 32+ character strings (`npm run setup:local` or `scripts/generate-env.ts`)
-- Change the default seeded admin password via `SEED_ADMIN_PASSWORD`
-- Replace all example media URLs with real CDN/storage URLs
-- Terminate TLS at the ingress (load balancer / reverse proxy)
-- Restrict `CORS_ORIGIN` to your actual frontend domains
-- Back up PostgreSQL and Redis volumes regularly
-- Rotate signing secrets through your secret manager on a schedule
-- Add a Socket.IO Redis adapter when running multiple API instances
+- [ ] Replace `JWT_ACCESS_SECRET` and `JWT_REFRESH_SECRET` with cryptographically random 32+ char strings
+- [ ] Change default seeded admin password via `SEED_ADMIN_PASSWORD` env var
+- [ ] Replace all example media URLs with real CDN/storage URLs
+- [ ] Terminate TLS at ingress (load balancer / reverse proxy)
+- [ ] Restrict `CORS_ORIGIN` to actual frontend domains (not `*`)
+- [ ] Backup PostgreSQL and Redis volumes regularly
+- [ ] Rotate signing secrets on a schedule via secret manager
+- [ ] Enable database SSL/TLS for remote connections
+- [ ] Configure Socket.IO Redis adapter for multi-instance deployments
+- [ ] Set up monitoring, alerting, and log aggregation
+- [ ] Run load tests to size infrastructure
+
+---
+
+## Documentation
+
+For comprehensive architecture, API contracts, authentication patterns, and database schema, see:
+- **Backend Architecture:** `BACKEND_STRUCTURE.md` — Complete audit with all endpoints, services, repositories, and design patterns
+- **Frontend Architecture:** `FRONTEND_STRUCTURE.md` — React Native app structure, contexts, routes, and features
+- **Main README:** `README.md` — Quick start guide for both frontend and backend
+
+For interactive API documentation, visit `/api-docs` after starting the backend.
