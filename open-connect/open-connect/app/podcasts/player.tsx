@@ -438,7 +438,7 @@ export default function PlayerScreen() {
 
   // ── Tab renderers ─────────────────────────────────────────────────────────
   const renderEpisodes = () => (
-    <ScrollView showsVerticalScrollIndicator={false}>
+    <View>
       {/* Sort row */}
       <TouchableOpacity style={T.filterRow} onPress={() => setShowSortMenu(true)} activeOpacity={0.8}>
         <Ionicons name="options-outline" size={16} color="rgba(255,255,255,0.6)" />
@@ -526,11 +526,11 @@ export default function PlayerScreen() {
         </TouchableOpacity>
       ))}
       <View style={{ height: 30 }} />
-    </ScrollView>
+    </View>
   );
 
   const renderAbout = () => (
-    <ScrollView showsVerticalScrollIndicator={false}>
+    <View>
       <Text style={T.aboutText}>{data.about}</Text>
       <View style={T.aboutTags}>
         <View style={T.tag}>
@@ -543,11 +543,11 @@ export default function PlayerScreen() {
         </View>
       </View>
       <View style={{ height: 30 }} />
-    </ScrollView>
+    </View>
   );
 
   const renderMoreLike = () => (
-    <ScrollView showsVerticalScrollIndicator={false}>
+    <View>
       {data.moreLike.length === 0
         ? <Text style={T.aboutText}>No similar podcasts found.</Text>
         : data.moreLike.map((item: MoreLike) => (
@@ -588,7 +588,7 @@ export default function PlayerScreen() {
         ))
       }
       <View style={{ height: 30 }} />
-    </ScrollView>
+    </View>
   );
 
   return (
