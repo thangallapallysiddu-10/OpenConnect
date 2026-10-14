@@ -17,6 +17,8 @@ import {
   View,
   useWindowDimensions,
 } from 'react-native';
+import { useAudio } from '../../src/context/AudioContext';
+import { usePlayer } from '../../src/context/PlayerContext';
 
 const { width, height } = Dimensions.get('window');
 const SBH = Platform.OS === 'android' ? (RNStatusBar.currentHeight ?? 44) : 44;
@@ -225,6 +227,15 @@ export default function PlayerScreen() {
     name: string; frequency: string; genre: string;
     listeners: string; image: string; accent: string;
   }>();
+
+  // Stop any currently playing song or podcast when this RJ screen opens
+  const { clearTrack } = useAudio();
+  const { stopPodcast } = usePlayer();
+  useEffect(() => {
+    clearTrack();
+    stopPodcast();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const name      = params.name      ?? 'RJ Station';
   const frequency = params.frequency ?? '—';
