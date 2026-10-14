@@ -597,7 +597,14 @@ export default function PlayerScreen() {
       <View style={isDesktop ? { flex: 1, width: '100%', maxWidth: contentMaxWidth, alignSelf: 'center' } : { flex: 1 }}>
       <StatusBar barStyle={isDarkMode ? "light-content" : "dark-content"} backgroundColor={topBg} />
 
-      {/* ── WHITE TOP SECTION ── */}
+      {/* Single outer ScrollView — everything scrolls together, no trapped sub-sections */}
+      <ScrollView
+        style={{ flex: 1 }}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={{ paddingBottom: 120 }}
+      >
+      {/* ── TOP SECTION ── */}
       <View style={[styles.topSection, { backgroundColor: topBg }]}>
         <SafeAreaView style={styles.safeArea}>
           <Animated.View style={contentStyle}>
@@ -723,9 +730,9 @@ export default function PlayerScreen() {
         </SafeAreaView>
       </View>
 
-      {/* ── DARK BOTTOM SECTION ── */}
-      <Animated.View style={[{ flex: 1 }, contentStyle]}>
-        <View style={[styles.bottomSection, { flex: 1, paddingTop: 0 }]}>
+      {/* ── BOTTOM SECTION ── */}
+      <Animated.View style={[contentStyle]}>
+        <View style={[styles.bottomSection, { paddingTop: 0 }]}>
           <View style={styles.handleBarContainer}><View style={styles.handleBar} /></View>
 
           <View style={T.tabBar}>
@@ -742,13 +749,14 @@ export default function PlayerScreen() {
             <Animated.View style={[T.tabIndicator, { width: TAB_WIDTH, transform: [{ translateX: tabIndicator }] }]} />
           </View>
 
-          <View style={{ flex: 1, marginTop: 16 }}>
+          <View style={{ marginTop: 16, paddingBottom: 16 }}>
             {activeTab === 'episodes' && renderEpisodes()}
             {activeTab === 'about'    && renderAbout()}
             {activeTab === 'moreLike' && renderMoreLike()}
           </View>
         </View>
       </Animated.View>
+      </ScrollView>
       </View>
 
       <Modal transparent animationType="fade" visible={showPodcastMenu} onRequestClose={() => setShowPodcastMenu(false)}>

@@ -26,6 +26,7 @@ import { NotificationProvider } from '../src/context/NotificationContext';
 import { NotificationsModal } from '../src/components/Notifications/NotificationsModal';
 import { PremiumProvider } from '../src/context/PremiumContext';
 import { PremiumFeatures } from '../src/components/PremiumFeatures/PremiumFeatures';
+import { AudioCoordinatorProvider } from '../src/context/AudioCoordinator';
 
 // ─── Breakpoint ──────────────────────────────────────────────────────────────
 const DESKTOP_BREAKPOINT = 900;
@@ -176,19 +177,21 @@ export default function RootLayout() {
         <AuthProvider>
           <PremiumProvider>
             <NotificationProvider>
-              <AudioProvider>
-                <PodcastProvider>
-                  <PlayerProvider>
-                    <FilterProvider>
-                      <FavoritesProvider>
-                        <RJLiveProvider>
-                          <RootLayoutContent />
-                        </RJLiveProvider>
-                      </FavoritesProvider>
-                    </FilterProvider>
-                  </PlayerProvider>
-                </PodcastProvider>
-              </AudioProvider>
+              <AudioCoordinatorProvider>
+                <AudioProvider>
+                  <PodcastProvider>
+                    <PlayerProvider>
+                      <FilterProvider>
+                        <FavoritesProvider>
+                          <RJLiveProvider>
+                            <RootLayoutContent />
+                          </RJLiveProvider>
+                        </FavoritesProvider>
+                      </FilterProvider>
+                    </PlayerProvider>
+                  </PodcastProvider>
+                </AudioProvider>
+              </AudioCoordinatorProvider>
             </NotificationProvider>
           </PremiumProvider>
         </AuthProvider>

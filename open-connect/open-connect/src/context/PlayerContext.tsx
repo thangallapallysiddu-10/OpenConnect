@@ -1,4 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { useAudioCoordinator } from './AudioCoordinator';
 
 interface Podcast {
   id: string;
@@ -37,6 +38,7 @@ const PODCAST_AUDIO_URLS: Record<string, string> = {
 };
 
 export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const coordinator = useAudioCoordinator();
   const [currentPodcast, setCurrentPodcast] = useState<Podcast | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -57,6 +59,22 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       }
     };
   }, []);
+
+  // Register stop function with coordinator
+  useEffect(() => {
+    coordinator.register('podcast', () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.src = '';
+        audioRef.current = null;
+      }
+      setCurrentPodcast(null);
+      setIsPlaying(false);
+      setProgress(0);
+      setDuration(0);
+      currentPodcastRef.current = null;
+    });
+  }, [coordinator]);
 
   const unloadCurrent = () => {
     if (audioRef.current) {
@@ -93,6 +111,9 @@ export const PlayerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       setIsLoading(false);
       return;
     }
+
+    // Stop all other audio sources before starting
+    coordinator.stopOthers('podcast');
 
     unloadCurrent();
     setCurrentPodcast(podcast);

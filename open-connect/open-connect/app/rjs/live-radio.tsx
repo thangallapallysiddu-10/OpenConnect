@@ -15,6 +15,7 @@ import {
   Image,
   ImageBackground,
   Platform,
+  ScrollView,
   Share,
   StatusBar,
   StyleSheet,
@@ -226,8 +227,12 @@ const StationCard: React.FC<StationCardProps> = ({
             style={StyleSheet.absoluteFillObject}
           />
 
-          {/* Full screen tap zone — single tap = play/pause, double tap = like */}
-          <TouchableOpacity activeOpacity={1} style={styles.tapArea} onPress={handleScreenTap} />
+          {/* Tap zone — only covers the upper 60% to avoid blocking bottom info scroll */}
+          <TouchableOpacity
+            activeOpacity={1}
+            style={[styles.tapArea, { bottom: '40%' }]}
+            onPress={handleScreenTap}
+          />
 
           <HeartBurst visible={showHeart} accentColor={station.accentColor} />
 
@@ -281,55 +286,59 @@ const StationCard: React.FC<StationCardProps> = ({
 
 </View>
 
-          <View style={styles.bottomInfo} pointerEvents="box-none">
-            <View style={[styles.genreTag, { borderColor: station.accentColor }]}>
-              <Text style={[styles.genreText, { color: station.accentColor }]}>{station.genre}</Text>
-            </View>
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4, gap: 12 }}>
-              <TouchableOpacity onPress={() => router.push(`/rjs/artist?name=${encodeURIComponent(station.name)}&image=${encodeURIComponent(station.thumbnail)}`)}>
-                <Text style={styles.stationName}>{station.name}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity 
-                onPress={() => setIsFollowing(!isFollowing)}
-                style={{
-                  paddingHorizontal: 12, paddingVertical: 4,
-                  borderRadius: 16,
-                  borderWidth: 1,
-                  borderColor: isFollowing ? 'rgba(255,255,255,0.4)' : '#fff',
-                  backgroundColor: isFollowing ? 'transparent' : 'rgba(255,255,255,0.15)'
-                }}
-              >
-                <Text style={{ color: isFollowing ? 'rgba(255,255,255,0.7)' : '#fff', fontSize: 12, fontWeight: '700' }}>
-                  {isFollowing ? 'Following' : 'Follow'}
-                </Text>
-              </TouchableOpacity>
-            </View>
-            <Text style={styles.tagline}>{station.tagline}</Text>
-            <View style={styles.showRow}>
-              <MaterialCommunityIcons name="music-note" size={14} color="rgba(255,255,255,0.7)" />
-              <Text style={styles.showText}>{station.currentShow} · {station.rjName}</Text>
-            </View>
-
-            <View style={styles.playRow}>
-              <EqualizerBars color={station.accentColor} isActive={isActive && isPlaying} />
-              <TouchableOpacity
-                onPress={onPlayPause}
-                activeOpacity={0.85}
-                style={[styles.playButton, { backgroundColor: station.accentColor }]}
-              >
-                <Ionicons
-                  name={isActive && isPlaying ? 'pause' : 'play'}
-                  size={26}
-                  color="#fff"
-                  style={isActive && isPlaying ? undefined : { marginLeft: 3 }}
-                />
-              </TouchableOpacity>
-              <View style={styles.listenersRow}>
-                <FontAwesome5 name="headphones" size={12} color="rgba(255,255,255,0.6)" />
-                <Text style={styles.listenersText}>{formatListeners(station.listeners)} listening</Text>
+          <ScrollView
+            style={{ zIndex: 20 }}
+            showsVerticalScrollIndicator={false}
+            scrollEventThrottle={16}
+            bounces={false}
+          >
+            <View style={styles.bottomInfo} pointerEvents="box-none">
+              <View style={[styles.genreTag, { borderColor: station.accentColor }]}>
+                <Text style={[styles.genreText, { color: station.accentColor }]}>{station.genre}</Text>
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4, gap: 12 }}>
+                <TouchableOpacity onPress={() => router.push(`/rjs/artist?name=${encodeURIComponent(station.name)}&image=${encodeURIComponent(station.thumbnail)}`)}>
+                  <Text style={styles.stationName}>{station.name}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => setIsFollowing(!isFollowing)}
+                  style={{
+                    paddingHorizontal: 12, paddingVertical: 4,
+                    borderRadius: 16, borderWidth: 1,
+                    borderColor: isFollowing ? 'rgba(255,255,255,0.4)' : '#fff',
+                    backgroundColor: isFollowing ? 'transparent' : 'rgba(255,255,255,0.15)',
+                  }}
+                >
+                  <Text style={{ color: isFollowing ? 'rgba(255,255,255,0.7)' : '#fff', fontSize: 12, fontWeight: '700' }}>
+                    {isFollowing ? 'Following' : 'Follow'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+              <Text style={styles.tagline}>{station.tagline}</Text>
+              <View style={styles.showRow}>
+                <MaterialCommunityIcons name="music-note" size={14} color="rgba(255,255,255,0.7)" />
+                <Text style={styles.showText}>{station.currentShow} · {station.rjName}</Text>
+              </View>
+              <View style={styles.playRow}>
+                <EqualizerBars color={station.accentColor} isActive={isActive && isPlaying} />
+                <TouchableOpacity
+                  onPress={onPlayPause}
+                  activeOpacity={0.85}
+                  style={[styles.playButton, { backgroundColor: station.accentColor }]}
+                >
+                  <Ionicons
+                    name={isActive && isPlaying ? 'pause' : 'play'}
+                    size={26} color="#fff"
+                    style={isActive && isPlaying ? undefined : { marginLeft: 3 }}
+                  />
+                </TouchableOpacity>
+                <View style={styles.listenersRow}>
+                  <FontAwesome5 name="headphones" size={12} color="rgba(255,255,255,0.6)" />
+                  <Text style={styles.listenersText}>{formatListeners(station.listeners)} listening</Text>
+                </View>
               </View>
             </View>
-          </View>
+          </ScrollView>
         </ImageBackground>
       </Animated.View>
     </View>

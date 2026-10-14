@@ -1,5 +1,6 @@
-import React, { createContext, useCallback, useContext, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { RJSStation } from '../data/rjsLiveStations';
+import { useAudioCoordinator } from './AudioCoordinator';
 
 interface RJLiveContextType {
   currentStation: RJSStation | null;
@@ -26,6 +27,7 @@ export const useRJLive = () => {
 };
 
 export const RJLiveProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const coordinator = useAudioCoordinator();
   const [currentStation, setCurrentStation] = useState<RJSStation | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [sessionActive, setSessionActive] = useState(false);
@@ -38,11 +40,21 @@ export const RJLiveProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     setIsLiveRadioFocused(focused);
   }, []);
 
+  // Register stop function with coordinator
+  useEffect(() => {
+    coordinator.register('rj', () => {
+      setCurrentStation(null);
+      setIsPlaying(false);
+      setSessionActive(false);
+    });
+  }, [coordinator]);
+
   const startSession = useCallback((station: RJSStation) => {
+    coordinator.stopOthers('rj');
     setCurrentStation(station);
     setSessionActive(true);
     setIsPlaying(true);
-  }, []);
+  }, [coordinator]);
 
   const updateStation = useCallback((station: RJSStation) => {
     setCurrentStation(station);

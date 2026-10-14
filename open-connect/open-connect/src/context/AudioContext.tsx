@@ -1,4 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { useAudioCoordinator } from './AudioCoordinator';
 
 interface Track {
   id: string;
@@ -80,6 +81,7 @@ export const useAudio = () => {
 };
 
 export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const coordinator = useAudioCoordinator();
   const [currentTrack, setCurrentTrack] = useState<Track | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
@@ -97,6 +99,23 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   useEffect(() => { currentTrackRef.current = currentTrack; }, [currentTrack]);
   useEffect(() => { durationRef.current = duration; }, [duration]);
   useEffect(() => { positionRef.current = position; }, [position]);
+
+  // Register with coordinator so other sources can stop us
+  useEffect(() => {
+    coordinator.register('song', () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.src = '';
+        audioRef.current = null;
+      }
+      setCurrentTrack(null);
+      setIsPlaying(false);
+      setPosition(0);
+      setDuration(0);
+      setIsLoaded(false);
+      currentTrackRef.current = null;
+    });
+  }, [coordinator]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -223,6 +242,7 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
 
     console.log('🆕 Loading new track');
+    coordinator.stopOthers('song');
     await playTrackInternal(track);
   };
 
