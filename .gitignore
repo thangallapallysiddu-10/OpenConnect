@@ -1,0 +1,21 @@
+# Local environment and secrets
+**/.env
+**/.env.*
+!**/.env.example
+
+# Dependencies and generated output
+**/node_modules/
+**/dist/
+**/coverage/
+**/.expo/
+**/web-build/
+**/.tsbuildinfo
+
+# Editor and OS files
+**/.vscode/
+**/.idea/
+**/.DS_Store
+
+# Logs and archives
+**/*.log
+*.zip

@@ -1,0 +1,38 @@
+export const rjs = [
+  {
+    id: '1',
+    name: 'RJ Alex',
+    showName: 'Morning Madness',
+    timeSlot: '6:00 AM - 10:00 AM',
+    image: 'https://randomuser.me/api/portraits/men/1.jpg',
+    isLive: true,
+    listeners: '2.3k',
+  },
+  {
+    id: '2',
+    name: 'RJ Sarah',
+    showName: 'Drive Time Hits',
+    timeSlot: '4:00 PM - 7:00 PM',
+    image: 'https://randomuser.me/api/portraits/women/2.jpg',
+    isLive: true,
+    listeners: '3.1k',
+  },
+  {
+    id: '3',
+    name: 'RJ Mike',
+    showName: 'Late Night Beats',
+    timeSlot: '10:00 PM - 1:00 AM',
+    image: 'https://randomuser.me/api/portraits/men/3.jpg',
+    isLive: false,
+    listeners: '1.8k',
+  },
+  {
+    id: '4',
+    name: 'RJ Priya',
+    showName: 'Bollywood Brunch',
+    timeSlot: '11:00 AM - 2:00 PM',
+    image: 'https://randomuser.me/api/portraits/women/4.jpg',
+    isLive: false,
+    listeners: '4.2k',
+  },
+];

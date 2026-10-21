@@ -1,0 +1,1 @@
+import { FastifyPluginAsync } from 'fastify';import { registerCatalogRoutes } from '../../shared/routes/catalog.routes';export const stationsRoutes:FastifyPluginAsync=app=>registerCatalogRoutes(app,'stations');
